@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Admin</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #0F0B1E; color: #F5F3FF; padding: 20px; max-width: 640px; margin: 0 auto; }
+  h1 { font-size: 20px; margin-bottom: 16px; }
+  h2 { font-size: 15px; margin: 24px 0 10px; color: #9C93B8; }
+  input { background: #1B1430; border: 1px solid rgba(255,255,255,.1); color: #fff; padding: 8px 10px; border-radius: 8px; width: 100%; margin-bottom: 8px; }
+  label { font-size: 12px; color: #9C93B8; }
+  button { background: #FF8A3D; border: none; color: #1a1005; font-weight: 700; padding: 10px 16px; border-radius: 8px; cursor: pointer; margin-top: 6px; }
+  .card { background: #1B1430; border-radius: 12px; padding: 14px; margin-bottom: 10px; font-size: 13px; }
+  .row { display: flex; justify-content: space-between; margin-bottom: 6px; }
+  .actions button { margin-right: 6px; font-size: 12px; padding: 6px 10px; }
+  #loginBox { max-width: 300px; margin: 80px auto; }
+</style>
+</head>
+<body>
+
+<div id="loginBox">
+  <h1>Admin Login</h1>
+  <input type="password" id="pass" placeholder="Mật khẩu admin">
+  <button onclick="login()">Đăng nhập</button>
+</div>
+
+<div id="app" style="display:none;">
+  <h1>Bảng điều khiển</h1>
+
+  <h2>Cấu hình</h2>
+  <label>Tỷ giá 1 coin = ? VND</label>
+  <input type="number" id="cfgRate">
+  <label>Số coin tối thiểu để rút</label>
+  <input type="number" id="cfgMin">
+  <label>Số phút cộng thêm mỗi lần xem ads</label>
+  <input type="number" id="cfgAdMin">
+  <button onclick="saveConfig()">Lưu cấu hình</button>
+
+  <h2>Yêu cầu rút tiền đang chờ</h2>
+  <div id="withdrawList"></div>
+</div>
+
+<script>
+let ADMIN_PASS = '';
+
+async function api(path, opts = {}) {
+  const res = await fetch('/api/admin' + path, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', 'X-Admin-Password': ADMIN_PASS, ...(opts.headers || {}) },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error);
+  return data;
+}
+
+async function login() {
+  ADMIN_PASS = document.getElementById('pass').value;
+  try {
+    await api('/config');
+    document.getElementById('loginBox').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    loadConfig();
+    loadWithdrawals();
+  } catch (e) {
+    alert('Sai mật khẩu');
+  }
+}
+
+async function loadConfig() {
+  const cfg = await api('/config');
+  document.getElementById('cfgRate').value = cfg.COIN_TO_VND || '';
+  document.getElementById('cfgMin').value = cfg.MIN_WITHDRAW_COIN || '';
+  document.getElementById('cfgAdMin').value = cfg.AD_EXTEND_MINUTES || '';
+}
+
+async function saveConfig() {
+  await api('/config', { method: 'POST', body: JSON.stringify({
+    COIN_TO_VND: document.getElementById('cfgRate').value,
+    MIN_WITHDRAW_COIN: document.getElementById('cfgMin').value,
+    AD_EXTEND_MINUTES: document.getElementById('cfgAdMin').value,
+  })});
+  alert('Đã lưu');
+}
+
+async function loadWithdrawals() {
+  const list = await api('/withdrawals?status=pending');
+  document.getElementById('withdrawList').innerHTML = list.map(w => `
+    <div class="card">
+      <div class="row"><span>${w.user.firstName || w.user.username || w.user.telegramId}</span><b>${w.vndAmount.toLocaleString('vi-VN')} ₫</b></div>
+      <div class="row"><span>Nhận tại</span><span>${w.walletInfo}</span></div>
+      <div class="actions">
+        <button onclick="decide(${w.id}, 'approve')">Duyệt</button>
+        <button onclick="decide(${w.id}, 'paid')">Đánh dấu đã trả</button>
+        <button onclick="decide(${w.id}, 'reject')" style="background:#F87171;">Từ chối</button>
+      </div>
+    </div>
+  `).join('') || '<p style="color:#9C93B8;">Không có yêu cầu nào</p>';
+}
+
+async function decide(id, action) {
+  await api(`/withdrawals/${id}/decide`, { method: 'POST', body: JSON.stringify({ action }) });
+  loadWithdrawals();
+}
+</script>
+</body>
+  </html>
+  
