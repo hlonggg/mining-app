@@ -1,0 +1,97 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             Int       @id @default(autoincrement())
+  telegramId     String    @unique
+  username       String?
+  firstName      String?
+  coinBalance    Float     @default(0)
+  totalEarned    Float     @default(0)
+
+  // Trạng thái phiên đào coin
+  miningActive     Boolean   @default(false)
+  miningStartedAt  DateTime?
+  miningExpiresAt  DateTime? // mốc hết hạn phiên đào (mặc định start + 8h, được cộng thêm khi xem ads)
+  miningRate       Float     @default(0.3) // coin/giây
+  lastClaimAt      DateTime?
+
+  // Referral
+  referralCode   String    @unique
+  referredById   Int?
+  referredBy     User?     @relation("Referrals", fields: [referredById], references: [id])
+  referrals      User[]    @relation("Referrals")
+
+  // Rút tiền
+  walletInfo     String?   // số điện thoại Momo / STK ngân hàng do user nhập
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  userTasks      UserTask[]
+  adWatches      AdWatch[]
+  withdrawRequests WithdrawRequest[]
+}
+
+model Task {
+  id           Int      @id @default(autoincrement())
+  title        String
+  description  String?
+  rewardCoins  Float
+  type         String   // "join_channel" | "watch_ad" | "follow" | "custom"
+  link         String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  userTasks    UserTask[]
+}
+
+model UserTask {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  taskId      Int
+  status      String   @default("pending") // pending | completed
+  completedAt DateTime?
+
+  user        User     @relation(fields: [userId], references: [id])
+  task        Task     @relation(fields: [taskId], references: [id])
+
+  @@unique([userId, taskId])
+}
+
+model AdWatch {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  rewardType   String   // "extend_time"
+  rewardAmount Int      // số phút được cộng thêm
+  watchedAt    DateTime @default(now())
+
+  user         User     @relation(fields: [userId], references: [id])
+}
+
+model WithdrawRequest {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  coinAmount  Float
+  vndAmount   Float
+  walletInfo  String
+  status      String   @default("pending") // pending | approved | rejected | paid
+  createdAt   DateTime @default(now())
+  processedAt DateTime?
+  note        String?
+
+  user        User     @relation(fields: [userId], references: [id])
+}
+
+// Cấu hình hệ thống (tỷ giá coin -> VND, ngưỡng rút tối thiểu, thời gian +ads, ...)
+model Config {
+  key   String @id
+  value String
+}
+
