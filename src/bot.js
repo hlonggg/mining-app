@@ -16,16 +16,13 @@ bot.start(async (ctx) => {
     const user = await findOrCreateUser({ telegramId, username, firstName, refCode });
 
     await ctx.reply(
-      `Chào ${firstName || 'bạn'}! 👋\n\n` +
-      `Bấm nút bên dưới để mở app và bắt đầu đào coin thụ động.\n` +
-      `Mã mời của bạn: \`${user.referralCode}\`\n` +
+      `Chào ${firstName || 'bạn'}!\n\n` +
+      `Bấm nút bên dưới để mở app và bắt đầu đào coin thụ động.\n\n` +
+      `Mã mời của bạn: ${user.referralCode}\n` +
       `Link mời bạn bè: https://t.me/${ctx.botInfo.username}?start=${user.referralCode}`,
-      {
-        parse_mode: 'Markdown',
-        ...Markup.inlineKeyboard([
-          Markup.button.webApp('⛏️ Mở App Đào Coin', MINI_APP_URL),
-        ]),
-      }
+      Markup.inlineKeyboard([
+        Markup.button.webApp('⛏️ Mở App Đào Coin', MINI_APP_URL),
+      ])
     );
   } catch (err) {
     // Không để lỗi ở đây làm crash cả container — chỉ log lại và báo user thử lại.
@@ -63,3 +60,4 @@ async function registerWebhook() {
 }
 
 module.exports = { bot, WEBHOOK_PATH, registerWebhook };
+      
