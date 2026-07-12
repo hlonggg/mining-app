@@ -9,6 +9,10 @@ async function main() {
     MINING_SESSION_HOURS: '8',   // thời lượng 1 phiên đào mặc định
     AD_EXTEND_MINUTES: '30',     // mỗi ad xem xong cộng thêm bao nhiêu phút
     MAX_EXTEND_HOURS: '4',       // giới hạn tối đa được cộng thêm / phiên (chặn spam ads vô hạn)
+    // Danh sách Block ID quảng cáo Adsgram — luân phiên (round-robin) giữa các ID này để tăng fill rate.
+    // Thay bằng blockId thật lấy tại https://partner.adsgram.ai — có thể để nhiều ID nếu bạn tạo
+    // nhiều "Block" khác nhau trong tài khoản Adsgram (mỗi Block có thể set định dạng/vị trí khác nhau).
+    AD_BLOCK_IDS: JSON.stringify(['your-block-id-1', 'your-block-id-2']),
   };
 
   for (const [key, value] of Object.entries(defaultConfig)) {
@@ -35,4 +39,3 @@ async function main() {
 }
 
 main().finally(() => prisma.$disconnect());
-     
