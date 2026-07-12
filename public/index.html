@@ -507,10 +507,13 @@ async function loadReferral() {
   document.getElementById('btnCopyLink').onclick = () => {
     navigator.clipboard && navigator.clipboard.writeText(r.inviteLink);
     if (tg && tg.showPopup) {
-      tg.showPopup({ message: 'Đã sao chép link mời!');
+      tg.showPopup({ message: 'Đã sao chép link mời!' });
+    } else {
+      toast('Đã sao chép link mời!');
     }
   };
 }
+
 // ---- MENU 4: Ví ----
 async function loadProfile() {
   const u = await api('/user/me');
