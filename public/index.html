@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Đào Coin</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://sad.adsgram.ai/js/sad.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
@@ -376,6 +377,45 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
   });
 });
 
+// ---- Quảng cáo thưởng (Adsgram) — luân phiên giữa nhiều Block ID để tăng tỷ lệ lấp đầy ----
+let adBlockIds = [];
+let adRotateIndex = 0;
+const adControllers = {};
+
+async function loadAdConfig() {
+  try {
+    const res = await fetch('/api/public/ad-config');
+    const data = await res.json();
+    adBlockIds = data.blockIds || [];
+  } catch (e) {
+    adBlockIds = [];
+  }
+}
+
+function getNextAdController() {
+  if (!adBlockIds.length || typeof window.Adsgram === 'undefined') return null;
+  const blockId = adBlockIds[adRotateIndex % adBlockIds.length];
+  adRotateIndex++;
+  if (!adControllers[blockId]) {
+    adControllers[blockId] = window.Adsgram.init({ blockId });
+  }
+  return adControllers[blockId];
+}
+
+function showRewardedAd() {
+  return new Promise((resolve, reject) => {
+    const controller = getNextAdController();
+    if (!controller) {
+      console.warn('Chưa cấu hình Adsgram blockId thật, bỏ qua bước xem ads (chỉ nên xảy ra lúc dev/test)');
+      resolve();
+      return;
+    }
+    controller.show()
+      .then(() => resolve())
+      .catch((result) => reject(result));
+  });
+}
+
 // ---- MENU 1: Đào coin ----
 let miningState = null;
 let tickInterval = null;
@@ -438,31 +478,78 @@ function formatDuration(ms) {
 }
 
 document.getElementById('btnStart').addEventListener('click', async () => {
+  const btn = document.getElementById('btnStart');
+  btn.disabled = true;
+  const originalText = btn.innerHTML;
+  btn.innerHTML = '📺 Đang tải quảng cáo...';
+  try {
+    await showRewardedAd();
+  } catch (e) {
+    toast('Bạn cần xem hết quảng cáo để bắt đầu đào coin');
+    btn.disabled = false;
+    btn.innerHTML = originalText;
+    return;
+  }
+  btn.innerHTML = originalText;
   try {
     await api('/mining/start', { method: 'POST' });
     toast('Bắt đầu đào coin!');
     loadMiningStatus();
-  } catch (e) { toast(e.message); }
+  } catch (e) {
+    toast(e.message);
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 document.getElementById('btnClaim').addEventListener('click', async () => {
+  const btn = document.getElementById('btnClaim');
+  btn.disabled = true;
+  const originalText = btn.textContent;
+  btn.textContent = '📺 Đang tải quảng cáo...';
+  try {
+    await showRewardedAd();
+  } catch (e) {
+    toast('Bạn cần xem hết quảng cáo để thu hoạch coin');
+    btn.disabled = false;
+    btn.textContent = originalText;
+    return;
+  }
+  btn.textContent = originalText;
   try {
     const r = await api('/mining/claim', { method: 'POST' });
     toast(`Đã thu hoạch ${r.claimed.toFixed(2)} coin!`);
     loadMiningStatus();
     loadPillBalance();
-  } catch (e) { toast(e.message); }
+  } catch (e) {
+    toast(e.message);
+    btn.disabled = false;
+  }
 });
 
 document.getElementById('btnWatchAd').addEventListener('click', async () => {
-  // TODO: gắn SDK quảng cáo thật (Adsgram/Monetag) ở đây.
-  // Chỉ gọi API /ads/watch SAU KHI SDK báo "ad completed", tránh cộng thưởng khống.
+  const btn = document.getElementById('btnWatchAd');
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '📺 Đang tải quảng cáo...';
   try {
-    // showAd() // <-- gọi SDK thật ở đây, đợi callback rồi mới tiếp tục
+    await showRewardedAd();
+  } catch (e) {
+    toast('Bạn cần xem hết quảng cáo để nhận thêm giờ');
+    btn.disabled = false;
+    btn.textContent = originalText;
+    return;
+  }
+  btn.textContent = originalText;
+  try {
     const r = await api('/ads/watch', { method: 'POST' });
     toast(`+${r.addedMinutes} phút đào coin!`);
     loadMiningStatus();
-  } catch (e) { toast(e.message); }
+  } catch (e) {
+    toast(e.message);
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 // ---- MENU 2: Nhiệm vụ ----
@@ -485,12 +572,29 @@ async function loadTasks() {
     btn.addEventListener('click', async () => {
       const link = btn.dataset.link;
       if (link) tg?.openLink(link);
+
+      const originalText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = '📺 Đang tải quảng cáo...';
+      try {
+        await showRewardedAd();
+      } catch (e) {
+        toast('Bạn cần xem hết quảng cáo để nhận thưởng nhiệm vụ');
+        btn.disabled = false;
+        btn.textContent = originalText;
+        return;
+      }
+      btn.textContent = originalText;
+
       try {
         const r = await api(`/tasks/${btn.dataset.id}/complete`, { method: 'POST' });
         toast(`+${r.reward} coin!`);
         loadTasks();
         loadPillBalance();
-      } catch (e) { toast(e.message); }
+      } catch (e) {
+        toast(e.message);
+        btn.disabled = false;
+      }
     });
   });
 }
@@ -558,8 +662,10 @@ async function loadPillBalance() {
   document.getElementById('userName').textContent = u.firstName || u.username || 'Bạn';
 }
 
+loadAdConfig();
 loadMiningStatus();
 loadPillBalance();
 </script>
 </body>
 </html>
+  
