@@ -913,3 +913,38 @@ async function loadProfile() {
       <span>${w.vndAmount.toLocaleString('vi-VN')}
       <span class="status-tag status-${w.status}">{statusLabel(w.status)}</span>
     </div>
+`).join('') || '<p style="color:var(--text-muted);font-size:13px;">Chưa có giao dịch nào</p>';
+}
+
+function statusLabel(s) {
+  return { pending: 'Đang chờ', approved: 'Đã duyệt', paid: 'Đã trả', rejected: 'Từ chối' }[s] || s;
+}
+
+document.getElementById('btnSaveWallet').addEventListener('click', async () => {
+  try {
+    await api('/user/wallet', { method: 'POST', body: JSON.stringify({ walletInfo: document.getElementById('walletInput').value }) });
+    toast('Đã lưu thông tin nhận tiền');
+  } catch (e) { toast(e.message); }
+});
+
+document.getElementById('btnWithdraw').addEventListener('click', async () => {
+  try {
+    await api('/user/withdraw', { method: 'POST' });
+    toast('Đã gửi yêu cầu rút tiền, chờ duyệt');
+    loadProfile();
+    loadPillBalance();
+  } catch (e) { toast(e.message); }
+});
+
+// ---- Khởi tạo ----
+async function loadPillBalance() {
+  const u = await api('/user/me');
+  document.getElementById('pillBalance').textContent = Math.floor(u.coinBalance);
+  document.getElementById('userName').textContent = u.firstName || u.username || 'Bạn';
+}
+
+loadMiningStatus();
+loadPillBalance();
+</script>
+</body>
+</html>
