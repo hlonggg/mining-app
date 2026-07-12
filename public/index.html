@@ -310,13 +310,26 @@
 </nav>
 
 <div class="toast" id="toast"></div>
+<div id="errorBanner" style="display:none; position:fixed; top:0; left:0; right:0; background:#F87171; color:#1a0505; font-size:12px; padding:10px 14px; z-index:999; font-family:monospace; word-break:break-all;"></div>
 
 <script>
-const tg = window.Telegram?.WebApp;
-tg?.ready();
-tg?.expand();
+// Hiển thị mọi lỗi JS trực tiếp lên màn hình — giúp debug trên điện thoại khi không mở được console.
+window.addEventListener('error', (e) => {
+  const banner = document.getElementById('errorBanner');
+  banner.style.display = 'block';
+  banner.textContent = 'Lỗi JS: ' + e.message + ' (dòng ' + e.lineno + ')';
+});
+window.addEventListener('unhandledrejection', (e) => {
+  const banner = document.getElementById('errorBanner');
+  banner.style.display = 'block';
+  banner.textContent = 'Lỗi Promise: ' + (e.reason?.message || e.reason);
+});
+</script>
+<script>
+const tg = window.Telegram ? window.Telegram.WebApp : null;
+if (tg) { tg.ready(); tg.expand(); }
 
-const initData = tg?.initData || '';
+const initData = tg ? tg.initData : '';
 
 async function api(path, opts = {}) {
   const res = await fetch('/api' + path, {
@@ -497,24 +510,4 @@ async function loadProfile() {
   const history = await api('/user/withdraw/history');
   document.getElementById('withdrawHistory').innerHTML = history.map(w => `
     <div class="withdraw-item">
-      <span>${w.vndAmount.toLocaleString('vi-VN')} ₫</span>
-      <span class="status-tag status-${w.status}">${statusLabel(w.status)}</span>
-    </div>
-  `).join('') || '<p style="color:var(--text-muted);font-size:13px;">Chưa có giao dịch nào</p>';
-}
-
-function statusLabel(s) {
-  return { pending: 'Đang chờ', approved: 'Đã duyệt', paid: 'Đã trả', rejected: 'Từ chối' }[s] || s;
-}
-
-document.getElementById('btnSaveWallet').addEventListener('click', async () => {
-  try {
-    await api('/user/wallet', { method: 'POST', body: JSON.stringify({ walletInfo: document.getElementById('walletInput').value }) });
-    toast('Đã lưu thông tin nhận tiền');
-  } catch (e) { toast(e.message); }
-});
-
-document.getElementById('btnWithdraw').addEventListener('click', async () => {
-  try {
-    await api('/user/withdraw', { method: 'POST' });
-
+      <span>${w
