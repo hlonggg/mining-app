@@ -11,6 +11,7 @@ const referralRoutes = require('../routes/referral');
 const adsRoutes = require('../routes/ads');
 const userRoutes = require('../routes/user');
 const adminRoutes = require('../routes/admin');
+const publicRoutes = require('../routes/public');
 
 const app = express();
 app.use(cors());
@@ -37,6 +38,7 @@ app.use('/api/referral', referralRoutes);
 app.use('/api/ads', adsRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/public', publicRoutes);
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 
