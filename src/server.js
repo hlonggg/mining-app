@@ -21,7 +21,15 @@ app.use(express.json());
 // Telegraf tự xử lý parsing nên đặt trước static/json đều được, chỉ cần đặt trước khi app.listen.
 app.use(bot.webhookCallback(WEBHOOK_PATH));
 
-app.use(express.static(path.join(__dirname, '..', 'public')));
+app.use(express.static(path.join(__dirname, '..', 'public'), {
+  etag: false,
+  lastModified: false,
+  setHeaders: (res, filePath) => {
+    // Không cache HTML — Telegram WebView hay giữ bản cũ, gây khó debug/update.
+    // JS/CSS nếu tách file riêng có thể cache bình thường, nhưng ở đây gộp chung trong .html nên tắt hết cho chắc.
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  },
+}));
 
 app.use('/api/mining', miningRoutes);
 app.use('/api/tasks', taskRoutes);
@@ -57,4 +65,4 @@ app.listen(PORT, async () => {
     console.error('Lỗi đăng ký webhook:', e.message);
   }
 });
-        
+  
