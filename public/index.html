@@ -913,7 +913,7 @@ async function loadProfile() {
       <span>${w.vndAmount.toLocaleString('vi-VN')}
       <span class="status-tag status-${w.status}">{statusLabel(w.status)}</span>
     </div>
-`).join('') || '<p style="color:var(--text-muted);font-size:13px;">Chưa có giao dịch nào</p>';
+  `).join('') || '<p style="color:var(--text-muted);font-size:13px;">Chưa có giao dịch nào</p>';
 }
 
 function statusLabel(s) {
