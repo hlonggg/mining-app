@@ -34,7 +34,9 @@
   <input type="number" id="cfgMin">
   <label>Số phút cộng thêm mỗi lần xem ads</label>
   <input type="number" id="cfgAdMin">
-  <label>Danh sách Block ID Adsgram (luân phiên) — mỗi dòng 1 ID</label>
+  <label>Adexium App ID (lớp chính, để trống nếu chưa đăng ký)</label>
+  <input type="text" id="cfgAdexiumId" placeholder="lấy tại publisher.adexium.io">
+  <label>Danh sách Block ID Adsgram (lớp dự phòng) — mỗi dòng 1 ID</label>
   <textarea id="cfgAdBlocks" rows="4" style="width:100%; background:#1B1430; border:1px solid rgba(255,255,255,.1); color:#fff; padding:8px 10px; border-radius:8px; font-family:monospace; font-size:12px;"></textarea>
   <button onclick="saveConfig()">Lưu cấu hình</button>
 
@@ -73,6 +75,7 @@ async function loadConfig() {
   document.getElementById('cfgRate').value = cfg.COIN_TO_VND || '';
   document.getElementById('cfgMin').value = cfg.MIN_WITHDRAW_COIN || '';
   document.getElementById('cfgAdMin').value = cfg.AD_EXTEND_MINUTES || '';
+  document.getElementById('cfgAdexiumId').value = cfg.ADEXIUM_APP_ID || '';
   try {
     const blocks = JSON.parse(cfg.AD_BLOCK_IDS || '[]');
     document.getElementById('cfgAdBlocks').value = blocks.join('\n');
@@ -89,6 +92,7 @@ async function saveConfig() {
     MIN_WITHDRAW_COIN: document.getElementById('cfgMin').value,
     AD_EXTEND_MINUTES: document.getElementById('cfgAdMin').value,
     AD_BLOCK_IDS: JSON.stringify(blockLines),
+    ADEXIUM_APP_ID: document.getElementById('cfgAdexiumId').value,
   })});
   alert('Đã lưu');
 }
@@ -115,3 +119,4 @@ async function decide(id, action) {
 </script>
 </body>
 </html>
+
