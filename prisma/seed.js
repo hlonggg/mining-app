@@ -4,7 +4,8 @@ const prisma = new PrismaClient();
 async function main() {
   // Config mặc định — chỉnh trong trang admin, không cần sửa code
   const defaultConfig = {
-    COIN_TO_VND: '10',           // 1 coin = 10 VND (bạn đổi trong admin panel)
+    COIN_TO_VND: '0.05',         // 1 coin = 0,05 VND
+    MINING_RATE_PER_SECOND: '0.1', // tốc độ đào coin/giây — chỉnh trong trang admin, không cần sửa code
     MIN_WITHDRAW_COIN: '5000',   // số coin tối thiểu để rút
     MINING_SESSION_HOURS: '8',   // thời lượng 1 phiên đào mặc định
     AD_EXTEND_MINUTES: '30',     // mỗi ad xem xong cộng thêm bao nhiêu phút
