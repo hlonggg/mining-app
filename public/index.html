@@ -6,6 +6,11 @@
 <title>Đào Coin</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script src="https://sad.adsgram.ai/js/sad.min.js"></script>
+<!-- TODO Adexium: goi @adexium/sdk tren npm la dang ES module cho du an co bundler (React/Vite/webpack).
+     Trang nay la HTML thuan khong qua bundler, nen KHONG tu y doan URL CDN o day.
+     Sau khi dang ky tai https://publisher.adexium.io, vao muc tich hop/dashboard cua Adexium de lay
+     dung doan ma nhung (ban browser/UMD) hoac hoi ho tro ky thuat qua https://t.me/AdexiumSupportBot
+     cach nhung cho trang HTML thuan, roi dan doan ma do vao day. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
@@ -377,16 +382,22 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
   });
 });
 
-// ---- Quảng cáo thưởng (Adsgram) — luân phiên giữa nhiều Block ID để tăng tỷ lệ lấp đầy ----
+// ---- Quảng cáo thưởng: Adexium (mediation, lớp chính) → Adsgram luân phiên (lớp dự phòng) ----
 let adBlockIds = [];
 let adRotateIndex = 0;
 const adControllers = {};
+let adexiumReady = false;
 
 async function loadAdConfig() {
   try {
     const res = await fetch('/api/public/ad-config');
     const data = await res.json();
     adBlockIds = data.blockIds || [];
+    // TODO Adexium: sau khi có đúng snippet SDK thật (xem ghi chú ở <head>), khởi tạo ở đây, ví dụ:
+    // const ads = new AdexiumAds({ appId: data.adexiumAppId, placement: { rewarded: true } });
+    // await ads.init();
+    // window.__adexiumInstance = ads;
+    // adexiumReady = true;
   } catch (e) {
     adBlockIds = [];
   }
@@ -402,18 +413,32 @@ function getNextAdController() {
   return adControllers[blockId];
 }
 
+// Thử Adexium trước (lớp chính, thường trả eCPM cao hơn nhờ mediation nhiều network).
+// Nếu Adexium chưa cấu hình / không có ads (no-fill) / lỗi → rơi xuống Adsgram làm dự phòng.
 function showRewardedAd() {
   return new Promise((resolve, reject) => {
-    const controller = getNextAdController();
-    if (!controller) {
-      console.warn('Chưa cấu hình Adsgram blockId thật, bỏ qua bước xem ads (chỉ nên xảy ra lúc dev/test)');
-      resolve();
+    if (adexiumReady && window.__adexiumInstance) {
+      // TODO Adexium: thay đúng tên hàm hiển thị rewarded ad theo tài liệu thật, ví dụ dạng phổ biến:
+      // window.__adexiumInstance.showRewarded()
+      //   .then((result) => { if (result.rewarded) resolve(); else fallbackToAdsgram(resolve, reject); })
+      //   .catch(() => fallbackToAdsgram(resolve, reject));
+      fallbackToAdsgram(resolve, reject); // tạm thời rơi thẳng xuống Adsgram cho tới khi có snippet thật
       return;
     }
-    controller.show()
-      .then(() => resolve())
-      .catch((result) => reject(result));
+    fallbackToAdsgram(resolve, reject);
   });
+}
+
+function fallbackToAdsgram(resolve, reject) {
+  const controller = getNextAdController();
+  if (!controller) {
+    console.warn('Chưa cấu hình quảng cáo thật (Adexium/Adsgram), bỏ qua bước xem ads (chỉ nên xảy ra lúc dev/test)');
+    resolve();
+    return;
+  }
+  controller.show()
+    .then(() => resolve())
+    .catch((result) => reject(result));
 }
 
 // ---- MENU 1: Đào coin ----
@@ -668,4 +693,3 @@ loadPillBalance();
 </script>
 </body>
 </html>
-  
