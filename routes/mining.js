@@ -8,13 +8,14 @@ router.get('/status', requireAuth, async (req, res) => {
   const user = req.user;
   const now = new Date();
   const expired = isSessionExpired(user, now);
-  const accrued = calcAccruedCoins(user, now);
+  const rate = await getConfigNumber('MINING_RATE_PER_SECOND', 0.1);
+  const accrued = calcAccruedCoins(user, now, rate);
 
   res.json({
     miningActive: user.miningActive && !expired,
     coinBalance: user.coinBalance,
     accruedThisSession: accrued,
-    miningRate: user.miningRate,
+    miningRate: rate,
     miningStartedAt: user.miningStartedAt,
     miningExpiresAt: user.miningExpiresAt,
     sessionExpired: expired,
@@ -49,7 +50,8 @@ router.post('/start', requireAuth, async (req, res) => {
 router.post('/claim', requireAuth, async (req, res) => {
   const user = req.user;
   const now = new Date();
-  const accrued = calcAccruedCoins(user, now);
+  const rate = await getConfigNumber('MINING_RATE_PER_SECOND', 0.1);
+  const accrued = calcAccruedCoins(user, now, rate);
 
   if (accrued <= 0) {
     return res.status(400).json({ error: 'Chưa có coin nào để thu hoạch' });
