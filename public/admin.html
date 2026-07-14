@@ -29,7 +29,9 @@
 
   <h2>Cấu hình</h2>
   <label>Tỷ giá 1 coin = ? VND</label>
-  <input type="number" id="cfgRate">
+  <input type="number" step="0.001" id="cfgRate">
+  <label>Tốc độ đào (coin/giây)</label>
+  <input type="number" step="0.001" id="cfgMiningRate">
   <label>Số coin tối thiểu để rút</label>
   <input type="number" id="cfgMin">
   <label>Số phút cộng thêm mỗi lần xem ads</label>
@@ -73,6 +75,7 @@ async function login() {
 async function loadConfig() {
   const cfg = await api('/config');
   document.getElementById('cfgRate').value = cfg.COIN_TO_VND || '';
+  document.getElementById('cfgMiningRate').value = cfg.MINING_RATE_PER_SECOND || '';
   document.getElementById('cfgMin').value = cfg.MIN_WITHDRAW_COIN || '';
   document.getElementById('cfgAdMin').value = cfg.AD_EXTEND_MINUTES || '';
   document.getElementById('cfgAdexiumId').value = cfg.ADEXIUM_APP_ID || '';
@@ -89,6 +92,7 @@ async function saveConfig() {
     .split('\n').map(s => s.trim()).filter(Boolean);
   await api('/config', { method: 'POST', body: JSON.stringify({
     COIN_TO_VND: document.getElementById('cfgRate').value,
+    MINING_RATE_PER_SECOND: document.getElementById('cfgMiningRate').value,
     MIN_WITHDRAW_COIN: document.getElementById('cfgMin').value,
     AD_EXTEND_MINUTES: document.getElementById('cfgAdMin').value,
     AD_BLOCK_IDS: JSON.stringify(blockLines),
