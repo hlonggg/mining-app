@@ -2,121 +2,694 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<title>Admin</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Đào Coin</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://sad.adsgram.ai/js/sad.min.js"></script>
+<!-- TODO Adexium: goi @adexium/sdk tren npm la dang ES module cho du an co bundler (React/Vite/webpack).
+     Trang nay la HTML thuan khong qua bundler, nen KHONG tu y doan URL CDN o day.
+     Sau khi dang ky tai https://publisher.adexium.io, vao muc tich hop/dashboard cua Adexium de lay
+     dung doan ma nhung (ban browser/UMD) hoac hoi ho tro ky thuat qua https://t.me/AdexiumSupportBot
+     cach nhung cho trang HTML thuan, roi dan doan ma do vao day. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
-  body { font-family: system-ui, sans-serif; background: #0F0B1E; color: #F5F3FF; padding: 20px; max-width: 640px; margin: 0 auto; }
-  h1 { font-size: 20px; margin-bottom: 16px; }
-  h2 { font-size: 15px; margin: 24px 0 10px; color: #9C93B8; }
-  input { background: #1B1430; border: 1px solid rgba(255,255,255,.1); color: #fff; padding: 8px 10px; border-radius: 8px; width: 100%; margin-bottom: 8px; }
-  label { font-size: 12px; color: #9C93B8; }
-  button { background: #FF8A3D; border: none; color: #1a1005; font-weight: 700; padding: 10px 16px; border-radius: 8px; cursor: pointer; margin-top: 6px; }
-  .card { background: #1B1430; border-radius: 12px; padding: 14px; margin-bottom: 10px; font-size: 13px; }
-  .row { display: flex; justify-content: space-between; margin-bottom: 6px; }
-  .actions button { margin-right: 6px; font-size: 12px; padding: 6px 10px; }
-  #loginBox { max-width: 300px; margin: 80px auto; }
+  :root {
+    --bg-deep: #0F0B1E;
+    --bg-surface: #1B1430;
+    --bg-surface-2: #241A3D;
+    --accent-copper: #FF8A3D;
+    --accent-gold: #F2B705;
+    --text-primary: #F5F3FF;
+    --text-muted: #9C93B8;
+    --success: #4ADE80;
+    --danger: #F87171;
+    --border: rgba(245, 243, 255, 0.08);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg-deep);
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    padding-bottom: 88px;
+    padding-top: 26px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .display { font-family: 'Sora', sans-serif; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  header.top {
+    padding: 20px 20px 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  header.top .greeting { font-size: 14px; color: var(--text-muted); }
+  header.top .name { font-size: 17px; font-weight: 700; }
+  .balance-pill {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 8px 14px;
+    display: flex; align-items: center; gap: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--accent-gold);
+  }
+
+  main { padding: 8px 20px 0; }
+  .screen { display: none; animation: fadein .25s ease; }
+  .screen.active { display: block; }
+  @keyframes fadein { from { opacity: 0; transform: translateY(6px);} to { opacity: 1; transform: none; } }
+
+  /* ---- Signature element: lõi khoáng đào coin ---- */
+  .core-wrap {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 28px 0 8px;
+  }
+  .core {
+    position: relative;
+    width: 220px; height: 220px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background:
+      radial-gradient(circle at 50% 40%, rgba(255,138,61,0.25), transparent 60%),
+      conic-gradient(from 0deg, var(--accent-copper) var(--progress, 0%), var(--bg-surface) var(--progress, 0%));
+    transition: background 1s linear;
+  }
+  .core::before {
+    content: '';
+    position: absolute;
+    inset: 10px;
+    border-radius: 50%;
+    background: var(--bg-deep);
+  }
+  .core.mining::after {
+    content: '';
+    position: absolute;
+    inset: -6px;
+    border-radius: 50%;
+    box-shadow: 0 0 40px 6px rgba(255,138,61,0.35);
+    animation: pulse 1.8s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: .5; }
+    50% { opacity: 1; }
+  }
+  .core-inner {
+    position: relative; z-index: 2;
+    text-align: center;
+  }
+  .core-inner .rate { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .08em; }
+  .core-inner .amount { font-size: 30px; font-weight: 700; font-family: 'JetBrains Mono', monospace; color: var(--accent-gold); margin-top: 2px; }
+  .core-inner .status { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+
+  .timer-row {
+    text-align: center; margin-top: 14px;
+    font-size: 13px; color: var(--text-muted);
+  }
+  .timer-row b { color: var(--text-primary); font-family: 'JetBrains Mono', monospace; }
+
+  .btn {
+    display: block; width: 100%;
+    border: none; border-radius: 16px;
+    padding: 16px;
+    font-family: 'Sora', sans-serif;
+    font-weight: 700; font-size: 15px;
+    cursor: pointer;
+    transition: transform .1s ease, opacity .2s ease;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn-primary { background: linear-gradient(135deg, var(--accent-copper), var(--accent-gold)); color: #1a1005; }
+  .btn-secondary { background: var(--bg-surface); color: var(--text-primary); border: 1px solid var(--border); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-row { margin-top: 22px; display: flex; flex-direction: column; gap: 10px; }
+
+  .ad-hint {
+    text-align: center; font-size: 12px; color: var(--text-muted); margin-top: 12px;
+  }
+
+  /* Tasks */
+  .task-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 10px;
+  }
+  .task-card .info { flex: 1; padding-right: 12px; }
+  .task-card .title { font-weight: 600; font-size: 14px; }
+  .task-card .reward { font-size: 12px; color: var(--accent-gold); margin-top: 4px; font-family: 'JetBrains Mono', monospace; }
+  .task-btn {
+    padding: 10px 16px; border-radius: 12px; border: none;
+    background: var(--accent-copper); color: #1a1005; font-weight: 700; font-size: 13px;
+    white-space: nowrap;
+  }
+  .task-btn.done { background: transparent; border: 1px solid var(--success); color: var(--success); }
+
+  h2.section-title {
+    font-family: 'Sora', sans-serif; font-size: 19px; font-weight: 700; margin: 4px 0 16px;
+  }
+  p.section-sub { color: var(--text-muted); font-size: 13px; margin-top: -12px; margin-bottom: 18px; }
+
+  /* Invite */
+  .invite-card {
+    background: linear-gradient(135deg, var(--bg-surface-2), var(--bg-surface));
+    border: 1px solid var(--border);
+    border-radius: 18px; padding: 20px; text-align: center; margin-bottom: 16px;
+  }
+  .invite-code {
+    font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 700;
+    color: var(--accent-gold); letter-spacing: .1em; margin: 10px 0;
+  }
+  .stat-row { display: flex; gap: 10px; margin-bottom: 16px; }
+  .stat-box {
+    flex: 1; background: var(--bg-surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 14px; text-align: center;
+  }
+  .stat-box .num { font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 700; }
+  .stat-box .label { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .ref-item {
+    display: flex; justify-content: space-between; padding: 10px 0;
+    border-bottom: 1px solid var(--border); font-size: 13px;
+  }
+
+  /* Profile */
+  .profile-card {
+    background: var(--bg-surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 18px; margin-bottom: 14px;
+  }
+  .profile-balance { font-size: 32px; font-weight: 700; font-family: 'JetBrains Mono', monospace; color: var(--accent-gold); }
+  .profile-vnd { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+  input[type=text] {
+    width: 100%; background: var(--bg-surface-2); border: 1px solid var(--border);
+    border-radius: 12px; padding: 12px 14px; color: var(--text-primary); font-size: 14px;
+    margin-top: 10px;
+  }
+  .withdraw-item { padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13px; display: flex; justify-content: space-between; }
+  .status-tag { font-size: 11px; padding: 3px 8px; border-radius: 999px; font-weight: 600; }
+  .status-pending { background: rgba(242,183,5,0.15); color: var(--accent-gold); }
+  .status-approved, .status-paid { background: rgba(74,222,128,0.15); color: var(--success); }
+  .status-rejected { background: rgba(248,113,113,0.15); color: var(--danger); }
+
+  /* Bottom nav */
+  nav.bottom {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: var(--bg-surface);
+    border-top: 1px solid var(--border);
+    display: flex;
+    padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+  }
+  nav.bottom button {
+    flex: 1; background: none; border: none; color: var(--text-muted);
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 8px 0; font-size: 11px; font-family: 'Inter', sans-serif; font-weight: 500;
+    cursor: pointer;
+  }
+  nav.bottom button svg { width: 22px; height: 22px; }
+  nav.bottom button.active { color: var(--accent-copper); }
+
+  .toast {
+    position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%);
+    background: var(--bg-surface-2); border: 1px solid var(--border);
+    padding: 12px 20px; border-radius: 12px; font-size: 13px;
+    opacity: 0; pointer-events: none; transition: opacity .3s ease;
+    z-index: 100; max-width: 85%; text-align: center;
+  }
+  .toast.show { opacity: 1; }
 </style>
 </head>
 <body>
 
-<div id="loginBox">
-  <h1>Admin Login</h1>
-  <input type="password" id="pass" placeholder="Mật khẩu admin">
-  <button onclick="login()">Đăng nhập</button>
-</div>
+<header class="top">
+  <div>
+    <div class="greeting">Chào mừng quay lại</div>
+    <div class="name" id="userName">—</div>
+  </div>
+  <div class="balance-pill">⛁ <span id="pillBalance">0</span></div>
+</header>
 
-<div id="app" style="display:none;">
-  <h1>Bảng điều khiển</h1>
+<main>
 
-  <h2>Cấu hình</h2>
-  <label>Tỷ giá 1 coin = ? VND</label>
-  <input type="number" id="cfgRate">
-  <label>Số coin tối thiểu để rút</label>
-  <input type="number" id="cfgMin">
-  <label>Số phút cộng thêm mỗi lần xem ads</label>
-  <input type="number" id="cfgAdMin">
-  <label>Adexium App ID (lớp chính, để trống nếu chưa đăng ký)</label>
-  <input type="text" id="cfgAdexiumId" placeholder="lấy tại publisher.adexium.io">
-  <label>Danh sách Block ID Adsgram (lớp dự phòng) — mỗi dòng 1 ID</label>
-  <textarea id="cfgAdBlocks" rows="4" style="width:100%; background:#1B1430; border:1px solid rgba(255,255,255,.1); color:#fff; padding:8px 10px; border-radius:8px; font-family:monospace; font-size:12px;"></textarea>
-  <button onclick="saveConfig()">Lưu cấu hình</button>
+  <!-- MENU 1: ĐÀO COIN (mặc định) -->
+  <section class="screen active" id="screen-mine">
+    <div class="core-wrap">
+      <div class="core" id="core">
+        <div class="core-inner">
+          <div class="rate">Đang tích lũy</div>
+          <div class="amount" id="accruedAmount">0.00</div>
+          <div class="status" id="coreStatus">Chưa bắt đầu</div>
+        </div>
+      </div>
+      <div class="timer-row" id="timerRow"></div>
+    </div>
 
-  <h2>Yêu cầu rút tiền đang chờ</h2>
-  <div id="withdrawList"></div>
-</div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btnStart">⛏️ Bắt đầu đào</button>
+      <button class="btn btn-secondary" id="btnClaim" disabled>Thu hoạch coin</button>
+      <button class="btn btn-secondary" id="btnWatchAd" style="display:none;">📺 Xem quảng cáo (+30 phút)</button>
+    </div>
+    <div class="ad-hint">Xem quảng cáo để kéo dài thời gian đào thụ động</div>
+  </section>
+
+  <!-- MENU 2: NHIỆM VỤ -->
+  <section class="screen" id="screen-tasks">
+    <h2 class="section-title">Nhiệm vụ</h2>
+    <p class="section-sub">Hoàn thành để nhận thêm coin ngay lập tức</p>
+    <div id="taskList"></div>
+  </section>
+
+  <!-- MENU 3: MỜI BẠN BÈ -->
+  <section class="screen" id="screen-invite">
+    <h2 class="section-title">Mời bạn bè</h2>
+    <p class="section-sub">Nhận thưởng khi bạn bè tham gia qua link của bạn</p>
+    <div class="invite-card">
+      <div style="font-size:13px;color:var(--text-muted)">Mã mời của bạn</div>
+      <div class="invite-code" id="refCode">--------</div>
+      <button class="btn btn-primary" id="btnCopyLink" style="margin-top:10px;">Sao chép link mời</button>
+    </div>
+    <div class="stat-row">
+      <div class="stat-box">
+        <div class="num" id="refCount">0</div>
+        <div class="label">Bạn đã mời</div>
+      </div>
+    </div>
+    <div id="refList"></div>
+  </section>
+
+  <!-- MENU 4: THÔNG TIN / VÍ -->
+  <section class="screen" id="screen-profile">
+    <h2 class="section-title">Ví của bạn</h2>
+    <div class="profile-card">
+      <div class="profile-balance" id="profBalance">0</div>
+      <div class="profile-vnd" id="profVnd">≈ 0 ₫</div>
+      <input type="text" id="walletInput" placeholder="Số điện thoại Momo / STK ngân hàng">
+      <button class="btn btn-secondary" id="btnSaveWallet" style="margin-top:10px;">Lưu thông tin nhận tiền</button>
+      <button class="btn btn-primary" id="btnWithdraw" style="margin-top:10px;">Rút tiền</button>
+      <div class="ad-hint" id="minWithdrawHint"></div>
+    </div>
+    <h2 class="section-title" style="font-size:15px;">Lịch sử rút tiền</h2>
+    <div id="withdrawHistory"></div>
+  </section>
+
+</main>
+
+<nav class="bottom">
+  <button class="nav-btn active" data-screen="mine">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4.5L6 21l1.5-7.5L2 9h7z"/></svg>
+    Đào coin
+  </button>
+  <button class="nav-btn" data-screen="tasks">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+    Nhiệm vụ
+  </button>
+  <button class="nav-btn" data-screen="invite">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/><path d="M1 21v-2a4 4 0 013-3.87"/></svg>
+    Mời bạn
+  </button>
+  <button class="nav-btn" data-screen="profile">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+    Ví
+  </button>
+</nav>
+
+<div class="toast" id="toast"></div>
+<div id="errorBanner" style="display:none; position:fixed; top:0; left:0; right:0; background:#F87171; color:#1a0505; font-size:12px; padding:10px 14px; z-index:999; font-family:monospace; word-break:break-all;"></div>
+<div id="debugBar" style="position:fixed; top:0; left:0; right:0; background:#2DD4BF; color:#052; font-size:11px; padding:6px 10px; z-index:998; font-family:monospace;">JS: đang tải...</div>
 
 <script>
-let ADMIN_PASS = '';
+// Hiển thị mọi lỗi JS trực tiếp lên màn hình — giúp debug trên điện thoại khi không mở được console.
+window.addEventListener('error', (e) => {
+  const banner = document.getElementById('errorBanner');
+  banner.style.display = 'block';
+  banner.textContent = 'Lỗi JS: ' + e.message + ' (dòng ' + e.lineno + ')';
+});
+window.addEventListener('unhandledrejection', (e) => {
+  const banner = document.getElementById('errorBanner');
+  banner.style.display = 'block';
+  banner.textContent = 'Lỗi Promise: ' + (e.reason?.message || e.reason);
+});
+</script>
+<script>
+const tg = window.Telegram ? window.Telegram.WebApp : null;
+if (tg) { tg.ready(); tg.expand(); }
+
+const initData = tg ? tg.initData : '';
+
+// Debug tạm thời: xác nhận JS đã thực thi tới đây, và đếm số lần chạm được trình duyệt ghi nhận.
+let tapCount = 0;
+const debugBar = document.getElementById('debugBar');
+debugBar.textContent = 'JS: đã chạy tới dòng ' + new Date().toLocaleTimeString() + ' | initData dài: ' + initData.length + ' ký tự | chạm: 0';
+document.addEventListener('click', () => {
+  tapCount++;
+  debugBar.textContent = 'JS: OK | initData dài: ' + initData.length + ' ký tự | chạm: ' + tapCount;
+});
 
 async function api(path, opts = {}) {
-  const res = await fetch('/api/admin' + path, {
+  const res = await fetch('/api' + path, {
     ...opts,
-    headers: { 'Content-Type': 'application/json', 'X-Admin-Password': ADMIN_PASS, ...(opts.headers || {}) },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Telegram-Init-Data': initData,
+      ...(opts.headers || {}),
+    },
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error);
+  if (!res.ok) throw new Error(data.error || 'Lỗi không xác định');
   return data;
 }
 
-async function login() {
-  ADMIN_PASS = document.getElementById('pass').value;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+// ---- Điều hướng tab ----
+document.querySelectorAll('.nav-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('screen-' + btn.dataset.screen).classList.add('active');
+    if (btn.dataset.screen === 'tasks') loadTasks();
+    if (btn.dataset.screen === 'invite') loadReferral();
+    if (btn.dataset.screen === 'profile') loadProfile();
+  });
+});
+
+// ---- Quảng cáo thưởng: Adexium (mediation, lớp chính) → Adsgram luân phiên (lớp dự phòng) ----
+let adBlockIds = [];
+let adRotateIndex = 0;
+const adControllers = {};
+let adexiumReady = false;
+
+async function loadAdConfig() {
   try {
-    await api('/config');
-    document.getElementById('loginBox').style.display = 'none';
-    document.getElementById('app').style.display = 'block';
-    loadConfig();
-    loadWithdrawals();
+    const res = await fetch('/api/public/ad-config');
+    const data = await res.json();
+    adBlockIds = data.blockIds || [];
+    // TODO Adexium: sau khi có đúng snippet SDK thật (xem ghi chú ở <head>), khởi tạo ở đây, ví dụ:
+    // const ads = new AdexiumAds({ appId: data.adexiumAppId, placement: { rewarded: true } });
+    // await ads.init();
+    // window.__adexiumInstance = ads;
+    // adexiumReady = true;
   } catch (e) {
-    alert('Sai mật khẩu');
+    adBlockIds = [];
   }
 }
 
-async function loadConfig() {
-  const cfg = await api('/config');
-  document.getElementById('cfgRate').value = cfg.COIN_TO_VND || '';
-  document.getElementById('cfgMin').value = cfg.MIN_WITHDRAW_COIN || '';
-  document.getElementById('cfgAdMin').value = cfg.AD_EXTEND_MINUTES || '';
-  document.getElementById('cfgAdexiumId').value = cfg.ADEXIUM_APP_ID || '';
-  try {
-    const blocks = JSON.parse(cfg.AD_BLOCK_IDS || '[]');
-    document.getElementById('cfgAdBlocks').value = blocks.join('\n');
-  } catch (e) {
-    document.getElementById('cfgAdBlocks').value = '';
+function getNextAdController() {
+  if (!adBlockIds.length || typeof window.Adsgram === 'undefined') return null;
+  const blockId = adBlockIds[adRotateIndex % adBlockIds.length];
+  adRotateIndex++;
+  if (!adControllers[blockId]) {
+    adControllers[blockId] = window.Adsgram.init({ blockId });
+  }
+  return adControllers[blockId];
+}
+
+// Thử Adexium trước (lớp chính, thường trả eCPM cao hơn nhờ mediation nhiều network).
+// Nếu Adexium chưa cấu hình / không có ads (no-fill) / lỗi → rơi xuống Adsgram làm dự phòng.
+function showRewardedAd() {
+  return new Promise((resolve, reject) => {
+    if (adexiumReady && window.__adexiumInstance) {
+      // TODO Adexium: thay đúng tên hàm hiển thị rewarded ad theo tài liệu thật, ví dụ dạng phổ biến:
+      // window.__adexiumInstance.showRewarded()
+      //   .then((result) => { if (result.rewarded) resolve(); else fallbackToAdsgram(resolve, reject); })
+      //   .catch(() => fallbackToAdsgram(resolve, reject));
+      fallbackToAdsgram(resolve, reject); // tạm thời rơi thẳng xuống Adsgram cho tới khi có snippet thật
+      return;
+    }
+    fallbackToAdsgram(resolve, reject);
+  });
+}
+
+function fallbackToAdsgram(resolve, reject) {
+  const controller = getNextAdController();
+  if (!controller) {
+    console.warn('Chưa cấu hình quảng cáo thật (Adexium/Adsgram), bỏ qua bước xem ads (chỉ nên xảy ra lúc dev/test)');
+    resolve();
+    return;
+  }
+  controller.show()
+    .then(() => resolve())
+    .catch((result) => reject(result));
+}
+
+// ---- MENU 1: Đào coin ----
+let miningState = null;
+let tickInterval = null;
+
+async function loadMiningStatus() {
+  miningState = await api('/mining/status');
+  renderMining();
+  if (tickInterval) clearInterval(tickInterval);
+  if (miningState.miningActive) {
+    tickInterval = setInterval(tickLocal, 1000);
   }
 }
 
-async function saveConfig() {
-  const blockLines = document.getElementById('cfgAdBlocks').value
-    .split('\n').map(s => s.trim()).filter(Boolean);
-  await api('/config', { method: 'POST', body: JSON.stringify({
-    COIN_TO_VND: document.getElementById('cfgRate').value,
-    MIN_WITHDRAW_COIN: document.getElementById('cfgMin').value,
-    AD_EXTEND_MINUTES: document.getElementById('cfgAdMin').value,
-    AD_BLOCK_IDS: JSON.stringify(blockLines),
-    ADEXIUM_APP_ID: document.getElementById('cfgAdexiumId').value,
-  })});
-  alert('Đã lưu');
+function tickLocal() {
+  if (!miningState?.miningActive) return;
+  miningState.accruedThisSession = +(miningState.accruedThisSession + miningState.miningRate).toFixed(4);
+  renderMining();
 }
 
-async function loadWithdrawals() {
-  const list = await api('/withdrawals?status=pending');
-  document.getElementById('withdrawList').innerHTML = list.map(w => `
-    <div class="card">
-      <div class="row"><span>${w.user.firstName || w.user.username || w.user.telegramId}</span><b>${w.vndAmount.toLocaleString('vi-VN')} ₫</b></div>
-      <div class="row"><span>Nhận tại</span><span>${w.walletInfo}</span></div>
-      <div class="actions">
-        <button onclick="decide(${w.id}, 'approve')">Duyệt</button>
-        <button onclick="decide(${w.id}, 'paid')">Đánh dấu đã trả</button>
-        <button onclick="decide(${w.id}, 'reject')" style="background:#F87171;">Từ chối</button>
+function renderMining() {
+  const core = document.getElementById('core');
+  const amount = document.getElementById('accruedAmount');
+  const status = document.getElementById('coreStatus');
+  const timerRow = document.getElementById('timerRow');
+  const btnStart = document.getElementById('btnStart');
+  const btnClaim = document.getElementById('btnClaim');
+  const btnWatchAd = document.getElementById('btnWatchAd');
+
+  amount.textContent = miningState.accruedThisSession.toFixed(2);
+  const progressPct = Math.min(100, (miningState.accruedThisSession / 2000) * 100); // vòng tròn lấp dần mang tính hình ảnh
+  core.style.setProperty('--progress', progressPct + '%');
+
+  if (miningState.miningActive) {
+    core.classList.add('mining');
+    status.textContent = 'Đang đào...';
+    btnStart.style.display = 'none';
+    btnClaim.disabled = false;
+    btnWatchAd.style.display = 'block';
+    if (miningState.miningExpiresAt) {
+      const remain = new Date(miningState.miningExpiresAt) - new Date();
+      timerRow.innerHTML = remain > 0
+        ? `Còn lại <b>${formatDuration(remain)}</b> trước khi hết phiên`
+        : `Phiên đã kết thúc — hãy thu hoạch`;
+    }
+  } else {
+    core.classList.remove('mining');
+    status.textContent = miningState.sessionExpired ? 'Đã hết phiên' : 'Chưa bắt đầu';
+    btnStart.style.display = 'block';
+    btnClaim.disabled = miningState.accruedThisSession <= 0;
+    btnWatchAd.style.display = 'none';
+    timerRow.textContent = '';
+  }
+}
+
+function formatDuration(ms) {
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  return `${h}g ${m}p`;
+}
+
+document.getElementById('btnStart').addEventListener('click', async () => {
+  const btn = document.getElementById('btnStart');
+  btn.disabled = true;
+  const originalText = btn.innerHTML;
+  btn.innerHTML = '📺 Đang tải quảng cáo...';
+  try {
+    await showRewardedAd();
+  } catch (e) {
+    toast('Bạn cần xem hết quảng cáo để bắt đầu đào coin');
+    btn.disabled = false;
+    btn.innerHTML = originalText;
+    return;
+  }
+  btn.innerHTML = originalText;
+  try {
+    await api('/mining/start', { method: 'POST' });
+    toast('Bắt đầu đào coin!');
+    loadMiningStatus();
+  } catch (e) {
+    toast(e.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('btnClaim').addEventListener('click', async () => {
+  const btn = document.getElementById('btnClaim');
+  btn.disabled = true;
+  const originalText = btn.textContent;
+  btn.textContent = '📺 Đang tải quảng cáo...';
+  try {
+    await showRewardedAd();
+  } catch (e) {
+    toast('Bạn cần xem hết quảng cáo để thu hoạch coin');
+    btn.disabled = false;
+    btn.textContent = originalText;
+    return;
+  }
+  btn.textContent = originalText;
+  try {
+    const r = await api('/mining/claim', { method: 'POST' });
+    toast(`Đã thu hoạch ${r.claimed.toFixed(2)} coin!`);
+    loadMiningStatus();
+    loadPillBalance();
+  } catch (e) {
+    toast(e.message);
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('btnWatchAd').addEventListener('click', async () => {
+  const btn = document.getElementById('btnWatchAd');
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '📺 Đang tải quảng cáo...';
+  try {
+    await showRewardedAd();
+  } catch (e) {
+    toast('Bạn cần xem hết quảng cáo để nhận thêm giờ');
+    btn.disabled = false;
+    btn.textContent = originalText;
+    return;
+  }
+  btn.textContent = originalText;
+  try {
+    const r = await api('/ads/watch', { method: 'POST' });
+    toast(`+${r.addedMinutes} phút đào coin!`);
+    loadMiningStatus();
+  } catch (e) {
+    toast(e.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ---- MENU 2: Nhiệm vụ ----
+async function loadTasks() {
+  const tasks = await api('/tasks');
+  const list = document.getElementById('taskList');
+  list.innerHTML = tasks.map(t => `
+    <div class="task-card">
+      <div class="info">
+        <div class="title">${t.title}</div>
+        <div class="reward">+${t.rewardCoins} coin</div>
       </div>
+      <button class="task-btn ${t.completed ? 'done' : ''}" data-id="${t.id}" data-link="${t.link || ''}" ${t.completed ? 'disabled' : ''}>
+        ${t.completed ? 'Đã xong' : 'Làm ngay'}
+      </button>
     </div>
-  `).join('') || '<p style="color:#9C93B8;">Không có yêu cầu nào</p>';
+  `).join('');
+
+  list.querySelectorAll('.task-btn:not(.done)').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const link = btn.dataset.link;
+      if (link) tg?.openLink(link);
+
+      const originalText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = '📺 Đang tải quảng cáo...';
+      try {
+        await showRewardedAd();
+      } catch (e) {
+        toast('Bạn cần xem hết quảng cáo để nhận thưởng nhiệm vụ');
+        btn.disabled = false;
+        btn.textContent = originalText;
+        return;
+      }
+      btn.textContent = originalText;
+
+      try {
+        const r = await api(`/tasks/${btn.dataset.id}/complete`, { method: 'POST' });
+        toast(`+${r.reward} coin!`);
+        loadTasks();
+        loadPillBalance();
+      } catch (e) {
+        toast(e.message);
+        btn.disabled = false;
+      }
+    });
+  });
 }
 
-async function decide(id, action) {
-  await api(`/withdrawals/${id}/decide`, { method: 'POST', body: JSON.stringify({ action }) });
-  loadWithdrawals();
+// ---- MENU 3: Mời bạn bè ----
+async function loadReferral() {
+  const r = await api('/referral');
+  document.getElementById('refCode').textContent = r.referralCode;
+  document.getElementById('refCount').textContent = r.totalReferrals;
+  document.getElementById('refList').innerHTML = r.referrals.map(u => `
+    <div class="ref-item"><span>${u.firstName || u.username || 'Người dùng'}</span><span style="color:var(--text-muted)">${new Date(u.createdAt).toLocaleDateString('vi-VN')}</span></div>
+  `).join('') || '<p style="color:var(--text-muted);font-size:13px;">Chưa có ai tham gia qua link của bạn</p>';
+
+  document.getElementById('btnCopyLink').onclick = () => {
+    navigator.clipboard && navigator.clipboard.writeText(r.inviteLink);
+    if (tg && tg.showPopup) {
+      tg.showPopup({ message: 'Đã sao chép link mời!' });
+    } else {
+      toast('Đã sao chép link mời!');
+    }
+  };
 }
+
+// ---- MENU 4: Ví ----
+async function loadProfile() {
+  const u = await api('/user/me');
+  document.getElementById('profBalance').textContent = u.coinBalance.toFixed(2);
+  document.getElementById('profVnd').textContent = `≈ ${u.estimatedVnd.toLocaleString('vi-VN')} ₫`;
+  document.getElementById('walletInput').value = u.walletInfo || '';
+  document.getElementById('minWithdrawHint').textContent = `Rút tối thiểu ${u.minWithdrawCoin} coin (tỷ giá hiện tại: 1 coin ≈ ${u.coinToVndRate} ₫)`;
+
+  const history = await api('/user/withdraw/history');
+  document.getElementById('withdrawHistory').innerHTML = history.map(w => `
+    <div class="withdraw-item">
+      <span>${w.vndAmount.toLocaleString('vi-VN')} ₫</span>
+      <span class="status-tag status-${w.status}">${statusLabel(w.status)}</span>
+    </div>
+  `).join('') || '<p style="color:var(--text-muted);font-size:13px;">Chưa có giao dịch nào</p>';
+}
+
+function statusLabel(s) {
+  return { pending: 'Đang chờ', approved: 'Đã duyệt', paid: 'Đã trả', rejected: 'Từ chối' }[s] || s;
+}
+
+document.getElementById('btnSaveWallet').addEventListener('click', async () => {
+  try {
+    await api('/user/wallet', { method: 'POST', body: JSON.stringify({ walletInfo: document.getElementById('walletInput').value }) });
+    toast('Đã lưu thông tin nhận tiền');
+  } catch (e) { toast(e.message); }
+});
+
+document.getElementById('btnWithdraw').addEventListener('click', async () => {
+  try {
+    await api('/user/withdraw', { method: 'POST' });
+    toast('Đã gửi yêu cầu rút tiền, chờ duyệt');
+    loadProfile();
+    loadPillBalance();
+  } catch (e) { toast(e.message); }
+});
+
+// ---- Khởi tạo ----
+async function loadPillBalance() {
+  const u = await api('/user/me');
+  document.getElementById('pillBalance').textContent = Math.floor(u.coinBalance);
+  document.getElementById('userName').textContent = u.firstName || u.username || 'Bạn';
+}
+
+loadAdConfig();
+loadMiningStatus();
+loadPillBalance();
 </script>
 </body>
 </html>
-
