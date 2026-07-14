@@ -12,7 +12,7 @@ router.get('/ad-config', async (req, res) => {
   } catch (e) {
     blockIds = [];
   }
-  const adexiumAppId = await getConfig('ADEXIUM_APP_ID', '');
+  const adexiumAppId = await getConfig('ADEXIUM_APP_ID', '0de687a2-e8e7-4c9f-89f6-0b1adeba2916');
   res.json({ blockIds: Array.isArray(blockIds) ? blockIds : [], adexiumAppId });
 });
 
