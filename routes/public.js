@@ -12,7 +12,8 @@ router.get('/ad-config', async (req, res) => {
   } catch (e) {
     blockIds = [];
   }
-  res.json({ blockIds: Array.isArray(blockIds) ? blockIds : [] });
+  const adexiumAppId = await getConfig('ADEXIUM_APP_ID', '');
+  res.json({ blockIds: Array.isArray(blockIds) ? blockIds : [], adexiumAppId });
 });
 
 module.exports = router;
