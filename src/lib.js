@@ -15,14 +15,15 @@ async function getConfigNumber(key, fallback) {
 
 // Tính số coin đã tích lũy trong phiên đào hiện tại (chưa claim)
 // Coin được tính theo thời gian trôi qua từ lúc start tới hiện tại, hoặc tới lúc hết hạn phiên (miningExpiresAt)
-function calcAccruedCoins(user, now = new Date()) {
+// rate: coin/giây — LẤY TỪ CONFIG (đổi được trong trang admin), không dùng user.miningRate cũ nữa
+function calcAccruedCoins(user, now = new Date(), rate) {
   if (!user.miningActive || !user.miningStartedAt) return 0;
 
   const expiresAt = user.miningExpiresAt || user.miningStartedAt;
   const effectiveNow = now < expiresAt ? now : expiresAt;
   const elapsedSeconds = Math.max(0, (effectiveNow.getTime() - user.miningStartedAt.getTime()) / 1000);
 
-  return +(elapsedSeconds * user.miningRate).toFixed(4);
+  return +(elapsedSeconds * rate).toFixed(4);
 }
 
 function isSessionExpired(user, now = new Date()) {
