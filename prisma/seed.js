@@ -14,9 +14,9 @@ async function main() {
     // Thay bằng blockId thật lấy tại https://partner.adsgram.ai — có thể để nhiều ID nếu bạn tạo
     // nhiều "Block" khác nhau trong tài khoản Adsgram (mỗi Block có thể set định dạng/vị trí khác nhau).
     AD_BLOCK_IDS: JSON.stringify(['your-block-id-1', 'your-block-id-2']),
-    // App ID lấy sau khi đăng ký tại https://publisher.adexium.io — để trống nếu chưa đăng ký,
-    // hệ thống sẽ tự dùng Adsgram làm nguồn chính cho tới khi bạn điền.
-    ADEXIUM_APP_ID: '',
+    // Widget ID lấy sau khi tạo Widget tại https://publisher.adexium.io (mục "Create Widget") —
+    // để trống nếu chưa đăng ký, hệ thống sẽ tự dùng Adsgram làm nguồn chính cho tới khi bạn điền.
+    ADEXIUM_WIDGET_ID: '',
   };
 
   for (const [key, value] of Object.entries(defaultConfig)) {
