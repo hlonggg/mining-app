@@ -6,11 +6,9 @@
 <title>Đào Coin</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script src="https://sad.adsgram.ai/js/sad.min.js"></script>
-<!-- TODO Adexium: goi @adexium/sdk tren npm la dang ES module cho du an co bundler (React/Vite/webpack).
-     Trang nay la HTML thuan khong qua bundler, nen KHONG tu y doan URL CDN o day.
-     Sau khi dang ky tai https://publisher.adexium.io, vao muc tich hop/dashboard cua Adexium de lay
-     dung doan ma nhung (ban browser/UMD) hoac hoi ho tro ky thuat qua https://t.me/AdexiumSupportBot
-     cach nhung cho trang HTML thuan, roi dan doan ma do vao day. -->
+<script type="text/javascript" src="https://cdn.tgads.space/assets/js/adexium-widget.min.js"></script>
+<!-- SDK Adexium (URL lấy trực tiếp từ dashboard tài khoản Adexium của bạn).
+     Widget ID đã cấu hình sẵn qua trang admin, không cần sửa gì thêm ở đây. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
@@ -386,21 +384,30 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
 let adBlockIds = [];
 let adRotateIndex = 0;
 const adControllers = {};
-let adexiumReady = false;
+let adexiumWidgetId = '';
+let adexiumWidget = null;
 
 async function loadAdConfig() {
   try {
     const res = await fetch('/api/public/ad-config');
     const data = await res.json();
     adBlockIds = data.blockIds || [];
-    // TODO Adexium: sau khi có đúng snippet SDK thật (xem ghi chú ở <head>), khởi tạo ở đây, ví dụ:
-    // const ads = new AdexiumAds({ appId: data.adexiumAppId, placement: { rewarded: true } });
-    // await ads.init();
-    // window.__adexiumInstance = ads;
-    // adexiumReady = true;
+    adexiumWidgetId = data.adexiumWidgetId || '';
   } catch (e) {
     adBlockIds = [];
   }
+}
+
+// Khởi tạo Adexium 1 lần duy nhất, tái sử dụng cho các lần gọi sau (đúng khuyến nghị tài liệu).
+function ensureAdexiumWidget() {
+  if (adexiumWidget) return adexiumWidget;
+  if (!adexiumWidgetId || typeof window.AdexiumWidget === 'undefined') return null;
+  adexiumWidget = new window.AdexiumWidget({
+    wid: adexiumWidgetId,
+    adFormat: 'interstitial',
+    debug: false,
+  });
+  return adexiumWidget;
 }
 
 function getNextAdController() {
@@ -413,19 +420,63 @@ function getNextAdController() {
   return adControllers[blockId];
 }
 
-// Thử Adexium trước (lớp chính, thường trả eCPM cao hơn nhờ mediation nhiều network).
-// Nếu Adexium chưa cấu hình / không có ads (no-fill) / lỗi → rơi xuống Adsgram làm dự phòng.
+// Thử Adexium trước (lớp chính). Nếu chưa cấu hình / không có ads (no-fill) / lỗi → rơi xuống Adsgram.
+// Ưu tiên coi "đã xem xong" khi có adPlaybackCompleted. Với interstitial (có thể là ảnh tĩnh, không
+// phải video, nên đôi khi không bắn sự kiện này), dùng thêm adClosed + timeout dự phòng để tránh
+// app bị treo vô thời hạn nếu user không đóng quảng cáo.
 function showRewardedAd() {
   return new Promise((resolve, reject) => {
-    if (adexiumReady && window.__adexiumInstance) {
-      // TODO Adexium: thay đúng tên hàm hiển thị rewarded ad theo tài liệu thật, ví dụ dạng phổ biến:
-      // window.__adexiumInstance.showRewarded()
-      //   .then((result) => { if (result.rewarded) resolve(); else fallbackToAdsgram(resolve, reject); })
-      //   .catch(() => fallbackToAdsgram(resolve, reject));
-      fallbackToAdsgram(resolve, reject); // tạm thời rơi thẳng xuống Adsgram cho tới khi có snippet thật
+    const widget = ensureAdexiumWidget();
+    if (!widget) {
+      fallbackToAdsgram(resolve, reject);
       return;
     }
-    fallbackToAdsgram(resolve, reject);
+
+    let settled = false;
+    let displayed = false;
+    let fallbackTimer = null;
+
+    const cleanup = () => {
+      widget.off('adReceived', onReceived);
+      widget.off('adDisplayed', onDisplayed);
+      widget.off('adPlaybackCompleted', onCompleted);
+      widget.off('adClosed', onClosed);
+      widget.off('noAdFound', onNoAd);
+      if (fallbackTimer) clearTimeout(fallbackTimer);
+    };
+    const finishSuccess = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve();
+    };
+    const onReceived = (ad) => {
+      widget.displayAd(ad);
+    };
+    const onDisplayed = () => {
+      displayed = true;
+      // Dự phòng: nếu sau 15s vẫn chưa có sự kiện "xem xong" nào (thường gặp ở ads dạng ảnh tĩnh),
+      // tự coi như hoàn thành — vì ads đã thực sự hiển thị cho user, không phải bỏ qua hoàn toàn.
+      fallbackTimer = setTimeout(finishSuccess, 15000);
+    };
+    const onCompleted = () => finishSuccess();
+    const onClosed = () => {
+      // Chỉ tính "xem xong" nếu ads đã thực sự hiển thị trước đó (chặn trường hợp đóng ngay khi vừa mở).
+      if (displayed) finishSuccess();
+    };
+    const onNoAd = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      fallbackToAdsgram(resolve, reject); // Adexium hết ads → dùng Adsgram
+    };
+
+    widget.on('adReceived', onReceived);
+    widget.on('adDisplayed', onDisplayed);
+    widget.on('adPlaybackCompleted', onCompleted);
+    widget.on('adClosed', onClosed);
+    widget.on('noAdFound', onNoAd);
+    widget.requestAd('interstitial');
   });
 }
 
