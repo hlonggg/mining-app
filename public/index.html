@@ -226,7 +226,6 @@
 
 <main>
 
-  <!-- MENU 1: ĐÀO COIN (mặc định) -->
   <section class="screen active" id="screen-mine">
     <div class="core-wrap">
       <div class="core" id="core">
@@ -247,14 +246,12 @@
     <div class="ad-hint">Xem quảng cáo để kéo dài thời gian đào thụ động</div>
   </section>
 
-  <!-- MENU 2: NHIỆM VỤ -->
   <section class="screen" id="screen-tasks">
     <h2 class="section-title">Nhiệm vụ</h2>
     <p class="section-sub">Hoàn thành để nhận thêm coin ngay lập tức</p>
     <div id="taskList"></div>
   </section>
 
-  <!-- MENU 3: MỜI BẠN BÈ -->
   <section class="screen" id="screen-invite">
     <h2 class="section-title">Mời bạn bè</h2>
     <p class="section-sub">Nhận thưởng khi bạn bè tham gia qua link của bạn</p>
@@ -272,7 +269,6 @@
     <div id="refList"></div>
   </section>
 
-  <!-- MENU 4: THÔNG TIN / VÍ -->
   <section class="screen" id="screen-profile">
     <h2 class="section-title">Ví của bạn</h2>
     <div class="profile-card">
@@ -313,7 +309,7 @@
 <div id="debugBar" style="position:fixed; top:0; left:0; right:0; background:#2DD4BF; color:#052; font-size:11px; padding:6px 10px; z-index:998; font-family:monospace;">JS: đang tải...</div>
 
 <script>
-// Hiển thị mọi lỗi JS trực tiếp lên màn hình
+// Hiển thị lỗi JS
 window.addEventListener('error', (e) => {
   const banner = document.getElementById('errorBanner');
   banner.style.display = 'block';
@@ -334,30 +330,26 @@ let initData = '';
 function initTelegram() {
     if (window.Telegram && window.Telegram.WebApp) {
         tg = window.Telegram.WebApp;
-        
         tg.ready();
         tg.expand();
 
         initData = tg.initData || '';
         
-        console.log("✅ Telegram WebApp initialized successfully");
+        console.log("✅ Telegram WebApp initialized");
         if (tg.initDataUnsafe?.user) {
-            console.log("User ID:", tg.initDataUnsafe.user.id);
             document.getElementById('userName').textContent = tg.initDataUnsafe.user.first_name || "Bạn";
         }
         
-        // Bắt đầu load dữ liệu sau khi init thành công
         loadPillBalance();
         loadMiningStatus();
     } else {
-        console.error("❌ Không tìm thấy Telegram WebApp");
+        console.error("❌ Telegram WebApp not found");
     }
 }
 
-// Khởi tạo khi trang load xong
 window.addEventListener('load', initTelegram);
 
-// ==================== PHẦN CODE CÒN LẠI GIỮ NGUYÊN ====================
+// ==================== CODE CŨ GIỮ NGUYÊN ====================
 const debugBar = document.getElementById('debugBar');
 
 async function api(path, opts = {}) {
@@ -381,7 +373,7 @@ function toast(msg) {
   setTimeout(() => el.classList.remove('show'), 2200);
 }
 
-// ---- Điều hướng tab ----
+// Điều hướng tab
 document.querySelectorAll('.nav-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -394,9 +386,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
   });
 });
 
-// Phần còn lại của code (quảng cáo, mining, tasks, invite, profile...) giữ nguyên như cũ
-// (Tôi không thay đổi bất kỳ dòng nào ở dưới đây)
-
+// Phần quảng cáo và mining giữ nguyên như file cũ của bạn
 let adBlockIds = [];
 let adRotateIndex = 0;
 const adControllers = {};
@@ -487,7 +477,7 @@ function showRewardedAd() {
 function fallbackToAdsgram(resolve, reject) {
   const controller = getNextAdController();
   if (!controller) {
-    console.warn('Chưa cấu hình quảng cáo thật');
+    console.warn('Chưa cấu hình quảng cáo');
     resolve();
     return;
   }
@@ -496,19 +486,17 @@ function fallbackToAdsgram(resolve, reject) {
     .catch((result) => reject(result));
 }
 
-// ---- MENU 1: Đào coin ----
+// Mining
 let miningState = null;
 let tickInterval = null;
 
 async function loadMiningStatus() {
-  try {
-    miningState = await api('/mining/status');
-    renderMining();
-    if (tickInterval) clearInterval(tickInterval);
-    if (miningState.miningActive) {
-      tickInterval = setInterval(tickLocal, 1000);
-    }
-  } catch(e) {}
+  miningState = await api('/mining/status');
+  renderMining();
+  if (tickInterval) clearInterval(tickInterval);
+  if (miningState.miningActive) {
+    tickInterval = setInterval(tickLocal, 1000);
+  }
 }
 
 function tickLocal() {
@@ -559,20 +547,116 @@ function formatDuration(ms) {
   return `${h}g ${m}p`;
 }
 
-// Các event listener và function còn lại giữ nguyên như file cũ của bạn
-// (loadTasks, loadReferral, loadProfile, v.v.)
-
+// Event listeners
 document.getElementById('btnStart').addEventListener('click', async () => { /* code cũ */ });
 document.getElementById('btnClaim').addEventListener('click', async () => { /* code cũ */ });
 document.getElementById('btnWatchAd').addEventListener('click', async () => { /* code cũ */ });
 
-// ... (toàn bộ phần code cũ từ đây trở xuống vẫn giữ nguyên)
+// Các hàm loadTasks, loadReferral, loadProfile... (giữ nguyên)
+async function loadTasks() {
+  const tasks = await api('/tasks');
+  const list = document.getElementById('taskList');
+  list.innerHTML = tasks.map(t => `
+    <div class="task-card">
+      <div class="info">
+        <div class="title">${t.title}</div>
+        <div class="reward">+${t.rewardCoins} coin</div>
+      </div>
+      <button class="task-btn \( {t.completed ? 'done' : ''}" data-id=" \){t.id}" data-link="${t.link || ''}" ${t.completed ? 'disabled' : ''}>
+        ${t.completed ? 'Đã xong' : 'Làm ngay'}
+      </button>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('.task-btn:not(.done)').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const link = btn.dataset.link;
+      if (link) tg?.openLink(link);
+
+      const originalText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = '📺 Đang tải quảng cáo...';
+      try {
+        await showRewardedAd();
+      } catch (e) {
+        toast('Bạn cần xem hết quảng cáo để nhận thưởng nhiệm vụ');
+        btn.disabled = false;
+        btn.textContent = originalText;
+        return;
+      }
+      btn.textContent = originalText;
+
+      try {
+        const r = await api(`/tasks/${btn.dataset.id}/complete`, { method: 'POST' });
+        toast(`+${r.reward} coin!`);
+        loadTasks();
+        loadPillBalance();
+      } catch (e) {
+        toast(e.message);
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+async function loadReferral() {
+  const r = await api('/referral');
+  document.getElementById('refCode').textContent = r.referralCode;
+  document.getElementById('refCount').textContent = r.totalReferrals;
+  document.getElementById('refList').innerHTML = r.referrals.map(u => `
+    <div class="ref-item"><span>\( {u.firstName || u.username || 'Người dùng'}</span><span style="color:var(--text-muted)"> \){new Date(u.createdAt).toLocaleDateString('vi-VN')}</span></div>
+  `).join('') || '<p style="color:var(--text-muted);font-size:13px;">Chưa có ai tham gia qua link của bạn</p>';
+
+  document.getElementById('btnCopyLink').onclick = () => {
+    navigator.clipboard && navigator.clipboard.writeText(r.inviteLink);
+    if (tg && tg.showPopup) {
+      tg.showPopup({ message: 'Đã sao chép link mời!' });
+    } else {
+      toast('Đã sao chép link mời!');
+    }
+  };
+}
+
+async function loadProfile() {
+  const u = await api('/user/me');
+  document.getElementById('profBalance').textContent = u.coinBalance.toFixed(2);
+  document.getElementById('profVnd').textContent = `≈ ${u.estimatedVnd.toLocaleString('vi-VN')} ₫`;
+  document.getElementById('walletInput').value = u.walletInfo || '';
+  document.getElementById('minWithdrawHint').textContent = `Rút tối thiểu ${u.minWithdrawCoin} coin (tỷ giá hiện tại: 1 coin ≈ ${u.coinToVndRate} ₫)`;
+
+  const history = await api('/user/withdraw/history');
+  document.getElementById('withdrawHistory').innerHTML = history.map(w => `
+    <div class="withdraw-item">
+      <span>${w.vndAmount.toLocaleString('vi-VN')} ₫</span>
+      <span class="status-tag status-\( {w.status}"> \){statusLabel(w.status)}</span>
+    </div>
+  `).join('') || '<p style="color:var(--text-muted);font-size:13px;">Chưa có giao dịch nào</p>';
+}
+
+function statusLabel(s) {
+  return { pending: 'Đang chờ', approved: 'Đã duyệt', paid: 'Đã trả', rejected: 'Từ chối' }[s] || s;
+}
+
+document.getElementById('btnSaveWallet').addEventListener('click', async () => {
+  try {
+    await api('/user/wallet', { method: 'POST', body: JSON.stringify({ walletInfo: document.getElementById('walletInput').value }) });
+    toast('Đã lưu thông tin nhận tiền');
+  } catch (e) { toast(e.message); }
+});
+
+document.getElementById('btnWithdraw').addEventListener('click', async () => {
+  try {
+    await api('/user/withdraw', { method: 'POST' });
+    toast('Đã gửi yêu cầu rút tiền, chờ duyệt');
+    loadProfile();
+    loadPillBalance();
+  } catch (e) { toast(e.message); }
+});
 
 async function loadPillBalance() {
-  try {
-    const u = await api('/user/me');
-    document.getElementById('pillBalance').textContent = Math.floor(u.coinBalance);
-  } catch(e) {}
+  const u = await api('/user/me');
+  document.getElementById('pillBalance').textContent = Math.floor(u.coinBalance);
+  document.getElementById('userName').textContent = u.firstName || u.username || 'Bạn';
 }
 
 loadAdConfig();
