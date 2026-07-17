@@ -3,11 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Đào Coin</title>
+<title>Đào Coin</title
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script src="https://sad.adsgram.ai/js/sad.min.js"></script>
 <script type="text/javascript" src="https://cdn.tgads.space/assets/js/adexium-widget.min.js"></script>
 <script src="https://pl30410342.effectivecpmnetwork.com/f3/59/7f/f3597f87b4bc78e7d0eff51b98ca5f46.js"></script>
+<!-- SDK Adexium (URL lấy trực tiếp từ dashboard tài khoản Adexium của bạn).
+     Widget ID đã cấu hình sẵn qua trang admin, không cần sửa gì thêm ở đây. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
@@ -61,6 +63,7 @@
   .screen.active { display: block; }
   @keyframes fadein { from { opacity: 0; transform: translateY(6px);} to { opacity: 1; transform: none; } }
 
+  /* ---- Signature element: lõi khoáng đào coin ---- */
   .core-wrap {
     display: flex; flex-direction: column; align-items: center;
     padding: 28px 0 8px;
@@ -127,6 +130,7 @@
     text-align: center; font-size: 12px; color: var(--text-muted); margin-top: 12px;
   }
 
+  /* Tasks */
   .task-card {
     background: var(--bg-surface);
     border: 1px solid var(--border);
@@ -150,6 +154,7 @@
   }
   p.section-sub { color: var(--text-muted); font-size: 13px; margin-top: -12px; margin-bottom: 18px; }
 
+  /* Invite */
   .invite-card {
     background: linear-gradient(135deg, var(--bg-surface-2), var(--bg-surface));
     border: 1px solid var(--border);
@@ -171,6 +176,7 @@
     border-bottom: 1px solid var(--border); font-size: 13px;
   }
 
+  /* Profile */
   .profile-card {
     background: var(--bg-surface); border: 1px solid var(--border);
     border-radius: 16px; padding: 18px; margin-bottom: 14px;
@@ -188,6 +194,7 @@
   .status-approved, .status-paid { background: rgba(74,222,128,0.15); color: var(--success); }
   .status-rejected { background: rgba(248,113,113,0.15); color: var(--danger); }
 
+  /* Bottom nav */
   nav.bottom {
     position: fixed; bottom: 0; left: 0; right: 0;
     background: var(--bg-surface);
@@ -226,6 +233,7 @@
 
 <main>
 
+  <!-- MENU 1: ĐÀO COIN (mặc định) -->
   <section class="screen active" id="screen-mine">
     <div class="core-wrap">
       <div class="core" id="core">
@@ -246,12 +254,14 @@
     <div class="ad-hint">Xem quảng cáo để kéo dài thời gian đào thụ động</div>
   </section>
 
+  <!-- MENU 2: NHIỆM VỤ -->
   <section class="screen" id="screen-tasks">
     <h2 class="section-title">Nhiệm vụ</h2>
     <p class="section-sub">Hoàn thành để nhận thêm coin ngay lập tức</p>
     <div id="taskList"></div>
   </section>
 
+  <!-- MENU 3: MỜI BẠN BÈ -->
   <section class="screen" id="screen-invite">
     <h2 class="section-title">Mời bạn bè</h2>
     <p class="section-sub">Nhận thưởng khi bạn bè tham gia qua link của bạn</p>
@@ -269,6 +279,7 @@
     <div id="refList"></div>
   </section>
 
+  <!-- MENU 4: THÔNG TIN / VÍ -->
   <section class="screen" id="screen-profile">
     <h2 class="section-title">Ví của bạn</h2>
     <div class="profile-card">
@@ -309,7 +320,7 @@
 <div id="debugBar" style="position:fixed; top:0; left:0; right:0; background:#2DD4BF; color:#052; font-size:11px; padding:6px 10px; z-index:998; font-family:monospace;">JS: đang tải...</div>
 
 <script>
-// Hiển thị lỗi JS
+// Hiển thị mọi lỗi JS trực tiếp lên màn hình — giúp debug trên điện thoại khi không mở được console.
 window.addEventListener('error', (e) => {
   const banner = document.getElementById('errorBanner');
   banner.style.display = 'block';
@@ -321,36 +332,20 @@ window.addEventListener('unhandledrejection', (e) => {
   banner.textContent = 'Lỗi Promise: ' + (e.reason?.message || e.reason);
 });
 </script>
-
 <script>
-// ==================== TELEGRAM INIT (ĐÃ SỬA) ====================
-let tg = null;
-let initData = '';
+const tg = window.Telegram ? window.Telegram.WebApp : null;
+if (tg) { tg.ready(); tg.expand(); }
 
-function initTelegram() {
-    if (window.Telegram && window.Telegram.WebApp) {
-        tg = window.Telegram.WebApp;
-        tg.ready();
-        tg.expand();
+const initData = tg ? tg.initData : '';
 
-        initData = tg.initData || '';
-        
-        console.log("✅ Telegram WebApp initialized");
-        if (tg.initDataUnsafe?.user) {
-            document.getElementById('userName').textContent = tg.initDataUnsafe.user.first_name || "Bạn";
-        }
-        
-        loadPillBalance();
-        loadMiningStatus();
-    } else {
-        console.error("❌ Telegram WebApp not found");
-    }
-}
-
-window.addEventListener('load', initTelegram);
-
-// ==================== CODE CŨ GIỮ NGUYÊN ====================
+// Debug tạm thời: xác nhận JS đã thực thi tới đây, và đếm số lần chạm được trình duyệt ghi nhận.
+let tapCount = 0;
 const debugBar = document.getElementById('debugBar');
+debugBar.textContent = 'JS: đã chạy tới dòng ' + new Date().toLocaleTimeString() + ' | initData dài: ' + initData.length + ' ký tự | chạm: 0';
+document.addEventListener('click', () => {
+  tapCount++;
+  debugBar.textContent = 'JS: OK | initData dài: ' + initData.length + ' ký tự | chạm: ' + tapCount;
+});
 
 async function api(path, opts = {}) {
   const res = await fetch('/api' + path, {
@@ -373,7 +368,7 @@ function toast(msg) {
   setTimeout(() => el.classList.remove('show'), 2200);
 }
 
-// Điều hướng tab
+// ---- Điều hướng tab ----
 document.querySelectorAll('.nav-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -386,7 +381,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
   });
 });
 
-// Phần quảng cáo và mining giữ nguyên như file cũ của bạn
+// ---- Quảng cáo thưởng: Adexium (mediation, lớp chính) → Adsgram luân phiên (lớp dự phòng) ----
 let adBlockIds = [];
 let adRotateIndex = 0;
 const adControllers = {};
@@ -404,6 +399,7 @@ async function loadAdConfig() {
   }
 }
 
+// Khởi tạo Adexium 1 lần duy nhất, tái sử dụng cho các lần gọi sau (đúng khuyến nghị tài liệu).
 function ensureAdexiumWidget() {
   if (adexiumWidget) return adexiumWidget;
   if (!adexiumWidgetId || typeof window.AdexiumWidget === 'undefined') return null;
@@ -425,6 +421,10 @@ function getNextAdController() {
   return adControllers[blockId];
 }
 
+// Thử Adexium trước (lớp chính). Nếu chưa cấu hình / không có ads (no-fill) / lỗi → rơi xuống Adsgram.
+// Ưu tiên coi "đã xem xong" khi có adPlaybackCompleted. Với interstitial (có thể là ảnh tĩnh, không
+// phải video, nên đôi khi không bắn sự kiện này), dùng thêm adClosed + timeout dự phòng để tránh
+// app bị treo vô thời hạn nếu user không đóng quảng cáo.
 function showRewardedAd() {
   return new Promise((resolve, reject) => {
     const widget = ensureAdexiumWidget();
@@ -451,18 +451,25 @@ function showRewardedAd() {
       cleanup();
       resolve();
     };
-    const onReceived = (ad) => { widget.displayAd(ad); };
+    const onReceived = (ad) => {
+      widget.displayAd(ad);
+    };
     const onDisplayed = () => {
       displayed = true;
+      // Dự phòng: nếu sau 15s vẫn chưa có sự kiện "xem xong" nào (thường gặp ở ads dạng ảnh tĩnh),
+      // tự coi như hoàn thành — vì ads đã thực sự hiển thị cho user, không phải bỏ qua hoàn toàn.
       fallbackTimer = setTimeout(finishSuccess, 15000);
     };
     const onCompleted = () => finishSuccess();
-    const onClosed = () => { if (displayed) finishSuccess(); };
+    const onClosed = () => {
+      // Chỉ tính "xem xong" nếu ads đã thực sự hiển thị trước đó (chặn trường hợp đóng ngay khi vừa mở).
+      if (displayed) finishSuccess();
+    };
     const onNoAd = () => {
       if (settled) return;
       settled = true;
       cleanup();
-      fallbackToAdsgram(resolve, reject);
+      fallbackToAdsgram(resolve, reject); // Adexium hết ads → dùng Adsgram
     };
 
     widget.on('adReceived', onReceived);
@@ -477,7 +484,7 @@ function showRewardedAd() {
 function fallbackToAdsgram(resolve, reject) {
   const controller = getNextAdController();
   if (!controller) {
-    console.warn('Chưa cấu hình quảng cáo');
+    console.warn('Chưa cấu hình quảng cáo thật (Adexium/Adsgram), bỏ qua bước xem ads (chỉ nên xảy ra lúc dev/test)');
     resolve();
     return;
   }
@@ -486,7 +493,7 @@ function fallbackToAdsgram(resolve, reject) {
     .catch((result) => reject(result));
 }
 
-// Mining
+// ---- MENU 1: Đào coin ----
 let miningState = null;
 let tickInterval = null;
 
@@ -515,7 +522,7 @@ function renderMining() {
   const btnWatchAd = document.getElementById('btnWatchAd');
 
   amount.textContent = miningState.accruedThisSession.toFixed(2);
-  const progressPct = Math.min(100, (miningState.accruedThisSession / 2000) * 100);
+  const progressPct = Math.min(100, (miningState.accruedThisSession / 2000) * 100); // vòng tròn lấp dần mang tính hình ảnh
   core.style.setProperty('--progress', progressPct + '%');
 
   if (miningState.miningActive) {
@@ -547,12 +554,82 @@ function formatDuration(ms) {
   return `${h}g ${m}p`;
 }
 
-// Event listeners
-document.getElementById('btnStart').addEventListener('click', async () => { /* code cũ */ });
-document.getElementById('btnClaim').addEventListener('click', async () => { /* code cũ */ });
-document.getElementById('btnWatchAd').addEventListener('click', async () => { /* code cũ */ });
+document.getElementById('btnStart').addEventListener('click', async () => {
+  const btn = document.getElementById('btnStart');
+  btn.disabled = true;
+  const originalText = btn.innerHTML;
+  btn.innerHTML = '📺 Đang tải quảng cáo...';
+  try {
+    await showRewardedAd();
+  } catch (e) {
+    toast('Bạn cần xem hết quảng cáo để bắt đầu đào coin');
+    btn.disabled = false;
+    btn.innerHTML = originalText;
+    return;
+  }
+  btn.innerHTML = originalText;
+  try {
+    await api('/mining/start', { method: 'POST' });
+    toast('Bắt đầu đào coin!');
+    loadMiningStatus();
+  } catch (e) {
+    toast(e.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
 
-// Các hàm loadTasks, loadReferral, loadProfile... (giữ nguyên)
+document.getElementById('btnClaim').addEventListener('click', async () => {
+  const btn = document.getElementById('btnClaim');
+  btn.disabled = true;
+  const originalText = btn.textContent;
+  btn.textContent = '📺 Đang tải quảng cáo...';
+  try {
+    await showRewardedAd();
+  } catch (e) {
+    toast('Bạn cần xem hết quảng cáo để thu hoạch coin');
+    btn.disabled = false;
+    btn.textContent = originalText;
+    return;
+  }
+  btn.textContent = originalText;
+  try {
+    const r = await api('/mining/claim', { method: 'POST' });
+    toast(`Đã thu hoạch ${r.claimed.toFixed(2)} coin!`);
+    loadMiningStatus();
+    loadPillBalance();
+  } catch (e) {
+    toast(e.message);
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('btnWatchAd').addEventListener('click', async () => {
+  const btn = document.getElementById('btnWatchAd');
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '📺 Đang tải quảng cáo...';
+  try {
+    await showRewardedAd();
+  } catch (e) {
+    toast('Bạn cần xem hết quảng cáo để nhận thêm giờ');
+    btn.disabled = false;
+    btn.textContent = originalText;
+    return;
+  }
+  btn.textContent = originalText;
+  try {
+    const r = await api('/ads/watch', { method: 'POST' });
+    toast(`+${r.addedMinutes} phút đào coin!`);
+    loadMiningStatus();
+  } catch (e) {
+    toast(e.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ---- MENU 2: Nhiệm vụ ----
 async function loadTasks() {
   const tasks = await api('/tasks');
   const list = document.getElementById('taskList');
@@ -562,7 +639,7 @@ async function loadTasks() {
         <div class="title">${t.title}</div>
         <div class="reward">+${t.rewardCoins} coin</div>
       </div>
-      <button class="task-btn \( {t.completed ? 'done' : ''}" data-id=" \){t.id}" data-link="${t.link || ''}" ${t.completed ? 'disabled' : ''}>
+      <button class="task-btn ${t.completed ? 'done' : ''}" data-id="${t.id}" data-link="${t.link || ''}" ${t.completed ? 'disabled' : ''}>
         ${t.completed ? 'Đã xong' : 'Làm ngay'}
       </button>
     </div>
@@ -599,12 +676,13 @@ async function loadTasks() {
   });
 }
 
+// ---- MENU 3: Mời bạn bè ----
 async function loadReferral() {
   const r = await api('/referral');
   document.getElementById('refCode').textContent = r.referralCode;
   document.getElementById('refCount').textContent = r.totalReferrals;
   document.getElementById('refList').innerHTML = r.referrals.map(u => `
-    <div class="ref-item"><span>\( {u.firstName || u.username || 'Người dùng'}</span><span style="color:var(--text-muted)"> \){new Date(u.createdAt).toLocaleDateString('vi-VN')}</span></div>
+    <div class="ref-item"><span>${u.firstName || u.username || 'Người dùng'}</span><span style="color:var(--text-muted)">${new Date(u.createdAt).toLocaleDateString('vi-VN')}</span></div>
   `).join('') || '<p style="color:var(--text-muted);font-size:13px;">Chưa có ai tham gia qua link của bạn</p>';
 
   document.getElementById('btnCopyLink').onclick = () => {
@@ -617,6 +695,7 @@ async function loadReferral() {
   };
 }
 
+// ---- MENU 4: Ví ----
 async function loadProfile() {
   const u = await api('/user/me');
   document.getElementById('profBalance').textContent = u.coinBalance.toFixed(2);
@@ -628,7 +707,7 @@ async function loadProfile() {
   document.getElementById('withdrawHistory').innerHTML = history.map(w => `
     <div class="withdraw-item">
       <span>${w.vndAmount.toLocaleString('vi-VN')} ₫</span>
-      <span class="status-tag status-\( {w.status}"> \){statusLabel(w.status)}</span>
+      <span class="status-tag status-${w.status}">${statusLabel(w.status)}</span>
     </div>
   `).join('') || '<p style="color:var(--text-muted);font-size:13px;">Chưa có giao dịch nào</p>';
 }
@@ -653,6 +732,7 @@ document.getElementById('btnWithdraw').addEventListener('click', async () => {
   } catch (e) { toast(e.message); }
 });
 
+// ---- Khởi tạo ----
 async function loadPillBalance() {
   const u = await api('/user/me');
   document.getElementById('pillBalance').textContent = Math.floor(u.coinBalance);
@@ -660,6 +740,8 @@ async function loadPillBalance() {
 }
 
 loadAdConfig();
+loadMiningStatus();
+loadPillBalance();
 </script>
 </body>
 </html>
