@@ -21,6 +21,8 @@ model User {
   miningExpiresAt  DateTime? // mốc hết hạn phiên đào (mặc định start + 8h, được cộng thêm khi xem ads)
   miningRate       Float     @default(0.3) // coin/giây
   lastClaimAt      DateTime?
+  lastClaimAmount    Float     @default(0) // số coin của lần thu hoạch gần nhất — dùng để xác thực bonus x2
+  lastClaimBonusUsed Boolean   @default(true) // true = đã dùng/không còn quyền x2 cho lần thu hoạch gần nhất
 
   // Referral
   referralCode   String    @unique
@@ -94,4 +96,3 @@ model Config {
   key   String @id
   value String
 }
-
