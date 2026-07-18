@@ -36,9 +36,13 @@
   <input type="number" id="cfgMin">
   <label>Số phút cộng thêm mỗi lần xem ads</label>
   <input type="number" id="cfgAdMin">
-  <label>Adexium Widget ID (lớp chính, để trống nếu chưa đăng ký)</label>
-  <input type="text" id="cfgAdexiumId" placeholder="lấy tại publisher.adexium.io mục Create Widget">
-  <label>Danh sách Block ID Adsgram (lớp dự phòng) — mỗi dòng 1 ID</label>
+  <label>Monetag script tag (dán NGUYÊN đoạn &lt;script&gt; từ dashboard Monetag)</label>
+  <textarea id="cfgMonetagScript" rows="3" style="width:100%; background:#1B1430; border:1px solid rgba(255,255,255,.1); color:#fff; padding:8px 10px; border-radius:8px; font-family:monospace; font-size:11px;" placeholder='&lt;script src="https://..." data-zone="123456" data-sdk="show_123456"&gt;&lt;/script&gt;'></textarea>
+  <label>Adexium Widget ID — định dạng Interstitial</label>
+  <input type="text" id="cfgAdexiumInterstitial" placeholder="vd: aef669c8-49f5-4530-a3bc-897e0e0705dd">
+  <label>Adexium Widget ID — định dạng Push-like</label>
+  <input type="text" id="cfgAdexiumPushlike" placeholder="vd: c9d4b7cf-e33c-4980-b51c-f78785ef758d">
+  <label>Danh sách Block ID Adsgram (dự phòng) — mỗi dòng 1 ID</label>
   <textarea id="cfgAdBlocks" rows="4" style="width:100%; background:#1B1430; border:1px solid rgba(255,255,255,.1); color:#fff; padding:8px 10px; border-radius:8px; font-family:monospace; font-size:12px;"></textarea>
   <button onclick="saveConfig()">Lưu cấu hình</button>
 
@@ -78,7 +82,9 @@ async function loadConfig() {
   document.getElementById('cfgMiningRate').value = cfg.MINING_RATE_PER_SECOND || '';
   document.getElementById('cfgMin').value = cfg.MIN_WITHDRAW_COIN || '';
   document.getElementById('cfgAdMin').value = cfg.AD_EXTEND_MINUTES || '';
-  document.getElementById('cfgAdexiumId').value = cfg.ADEXIUM_WIDGET_ID || '';
+  document.getElementById('cfgMonetagScript').value = cfg.MONETAG_SCRIPT_TAG || '';
+  document.getElementById('cfgAdexiumInterstitial').value = cfg.ADEXIUM_INTERSTITIAL_ID || '';
+  document.getElementById('cfgAdexiumPushlike').value = cfg.ADEXIUM_PUSHLIKE_ID || '';
   try {
     const blocks = JSON.parse(cfg.AD_BLOCK_IDS || '[]');
     document.getElementById('cfgAdBlocks').value = blocks.join('\n');
@@ -96,7 +102,9 @@ async function saveConfig() {
     MIN_WITHDRAW_COIN: document.getElementById('cfgMin').value,
     AD_EXTEND_MINUTES: document.getElementById('cfgAdMin').value,
     AD_BLOCK_IDS: JSON.stringify(blockLines),
-    ADEXIUM_WIDGET_ID: document.getElementById('cfgAdexiumId').value,
+    MONETAG_SCRIPT_TAG: document.getElementById('cfgMonetagScript').value,
+    ADEXIUM_INTERSTITIAL_ID: document.getElementById('cfgAdexiumInterstitial').value,
+    ADEXIUM_PUSHLIKE_ID: document.getElementById('cfgAdexiumPushlike').value,
   })});
   alert('Đã lưu');
 }
