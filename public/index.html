@@ -4,12 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Đào Coin</title>
-<script src="https://telegram.org/js/telegram-web-app.js?56"></script>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script src="https://sad.adsgram.ai/js/sad.min.js"></script>
 <script type="text/javascript" src="https://cdn.tgads.space/assets/js/adexium-widget.min.js"></script>
-<script src="https://pl30410342.effectivecpmnetwork.com/f3/59/7f/f3597f87b4bc78e7d0eff51b98ca5f46.js"></script>
-<!-- SDK Adexium (URL lấy trực tiếp từ dashboard tài khoản Adexium của bạn).
-     Widget ID đã cấu hình sẵn qua trang admin, không cần sửa gì thêm ở đây. -->
+<!-- Script SDK Monetag KHÔNG đặt cố định ở đây — vì domain thật do Monetag cấp riêng theo từng
+     tài khoản (không phải URL cố định chung cho mọi người). Script được tự động chèn bằng JS ở
+     cuối trang, dựa trên đoạn <script> thật bạn dán vào trang admin (ô "Monetag script tag"). -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
@@ -381,34 +381,60 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
   });
 });
 
-// ---- Quảng cáo thưởng: Adexium (mediation, lớp chính) → Adsgram luân phiên (lớp dự phòng) ----
+// ---- Quảng cáo THƯỞNG THÊM (không bắt buộc cho chức năng cơ bản): Monetag (chính) → Adsgram (dự phòng) ----
+// Lưu ý quan trọng: theo chính sách các mạng quảng cáo (Adsgram, và tương tự ở hầu hết network khác),
+// KHÔNG được bắt buộc xem ads mới cho dùng chức năng cơ bản của app — chỉ được dùng ads để THƯỞNG THÊM
+// (opt-in). Vi phạm sẽ bị từ chối/khóa tài khoản quảng cáo vĩnh viễn, không thương lượng lại được.
 let adBlockIds = [];
 let adRotateIndex = 0;
 const adControllers = {};
-let adexiumWidgetId = '';
-let adexiumWidget = null;
+let monetagShowFn = null; // tên hàm show_XXX thật, đọc từ script tag admin dán vào
+let monetagLoadPromise = null;
+let adexiumIds = { interstitial: '', pushlike: '' };
+const adexiumWidgets = {}; // cache theo định dạng
 
 async function loadAdConfig() {
   try {
     const res = await fetch('/api/public/ad-config');
     const data = await res.json();
     adBlockIds = data.blockIds || [];
-    adexiumWidgetId = data.adexiumWidgetId || '';
+    adexiumIds.interstitial = data.adexiumInterstitialId || '';
+    adexiumIds.pushlike = data.adexiumPushlikeId || '';
+    if (data.monetagScriptTag) {
+      monetagLoadPromise = injectMonetagScript(data.monetagScriptTag);
+    }
   } catch (e) {
     adBlockIds = [];
   }
 }
 
-// Khởi tạo Adexium 1 lần duy nhất, tái sử dụng cho các lần gọi sau (đúng khuyến nghị tài liệu).
-function ensureAdexiumWidget() {
-  if (adexiumWidget) return adexiumWidget;
-  if (!adexiumWidgetId || typeof window.AdexiumWidget === 'undefined') return null;
-  adexiumWidget = new window.AdexiumWidget({
-    wid: adexiumWidgetId,
-    adFormat: 'interstitial',
-    debug: false,
+// Chèn động đoạn <script> Monetag thật (dán từ dashboard của bạn trong trang admin) vào trang,
+// và tự đọc ra tên hàm show_XXX từ thuộc tính data-sdk của chính đoạn script đó.
+function injectMonetagScript(scriptTagHtml) {
+  return new Promise((resolve) => {
+    try {
+      const temp = document.createElement('div');
+      temp.innerHTML = scriptTagHtml.trim();
+      const srcEl = temp.querySelector('script');
+      if (!srcEl || !srcEl.src) {
+        resolve(false);
+        return;
+      }
+      const sdkFnName = srcEl.getAttribute('data-sdk');
+      const script = document.createElement('script');
+      script.src = srcEl.src;
+      if (srcEl.getAttribute('data-zone')) script.setAttribute('data-zone', srcEl.getAttribute('data-zone'));
+      if (sdkFnName) script.setAttribute('data-sdk', sdkFnName);
+      script.onload = () => {
+        monetagShowFn = sdkFnName;
+        resolve(true);
+      };
+      script.onerror = () => resolve(false);
+      document.head.appendChild(script);
+    } catch (e) {
+      resolve(false);
+    }
   });
-  return adexiumWidget;
 }
 
 function getNextAdController() {
@@ -421,22 +447,28 @@ function getNextAdController() {
   return adControllers[blockId];
 }
 
-// Thử Adexium trước (lớp chính). Nếu chưa cấu hình / không có ads (no-fill) / lỗi → rơi xuống Adsgram.
-// Ưu tiên coi "đã xem xong" khi có adPlaybackCompleted. Với interstitial (có thể là ảnh tĩnh, không
-// phải video, nên đôi khi không bắn sự kiện này), dùng thêm adClosed + timeout dự phòng để tránh
-// app bị treo vô thời hạn nếu user không đóng quảng cáo.
-function showRewardedAd() {
+// Khởi tạo (1 lần, có cache) widget Adexium theo từng định dạng riêng: interstitial hoặc push-like.
+function ensureAdexiumWidget(format) {
+  const wid = format === 'interstitial' ? adexiumIds.interstitial : adexiumIds.pushlike;
+  if (!wid || typeof window.AdexiumWidget === 'undefined') return null;
+  if (!adexiumWidgets[format]) {
+    adexiumWidgets[format] = new window.AdexiumWidget({ wid, adFormat: format, debug: false });
+  }
+  return adexiumWidgets[format];
+}
+
+// Thử hiện ads Adexium theo 1 định dạng cụ thể. Giống logic Adexium trước đó: ưu tiên
+// adPlaybackCompleted, có thêm adClosed + timeout 15s dự phòng cho định dạng ảnh tĩnh.
+function tryAdexiumFormat(format) {
   return new Promise((resolve, reject) => {
-    const widget = ensureAdexiumWidget();
+    const widget = ensureAdexiumWidget(format);
     if (!widget) {
-      fallbackToAdsgram(resolve, reject);
+      reject(new Error('Adexium chưa cấu hình cho định dạng ' + format));
       return;
     }
-
     let settled = false;
     let displayed = false;
     let fallbackTimer = null;
-
     const cleanup = () => {
       widget.off('adReceived', onReceived);
       widget.off('adDisplayed', onDisplayed);
@@ -451,46 +483,76 @@ function showRewardedAd() {
       cleanup();
       resolve();
     };
-    const onReceived = (ad) => {
-      widget.displayAd(ad);
-    };
+    const onReceived = (ad) => widget.displayAd(ad);
     const onDisplayed = () => {
       displayed = true;
-      // Dự phòng: nếu sau 15s vẫn chưa có sự kiện "xem xong" nào (thường gặp ở ads dạng ảnh tĩnh),
-      // tự coi như hoàn thành — vì ads đã thực sự hiển thị cho user, không phải bỏ qua hoàn toàn.
       fallbackTimer = setTimeout(finishSuccess, 15000);
     };
     const onCompleted = () => finishSuccess();
-    const onClosed = () => {
-      // Chỉ tính "xem xong" nếu ads đã thực sự hiển thị trước đó (chặn trường hợp đóng ngay khi vừa mở).
-      if (displayed) finishSuccess();
-    };
+    const onClosed = () => { if (displayed) finishSuccess(); };
     const onNoAd = () => {
       if (settled) return;
       settled = true;
       cleanup();
-      fallbackToAdsgram(resolve, reject); // Adexium hết ads → dùng Adsgram
+      reject(new Error('Adexium no-fill (' + format + ')'));
     };
-
     widget.on('adReceived', onReceived);
     widget.on('adDisplayed', onDisplayed);
     widget.on('adPlaybackCompleted', onCompleted);
     widget.on('adClosed', onClosed);
     widget.on('noAdFound', onNoAd);
-    widget.requestAd('interstitial');
+    widget.requestAd(format);
   });
 }
 
-function fallbackToAdsgram(resolve, reject) {
-  const controller = getNextAdController();
-  if (!controller) {
-    console.warn('Chưa cấu hình quảng cáo thật (Adexium/Adsgram), bỏ qua bước xem ads (chỉ nên xảy ra lúc dev/test)');
-    resolve();
-    return;
+// Thử lần lượt 2 định dạng Adexium: interstitial trước, hết ads thì thử push-like.
+async function tryAdexium() {
+  try {
+    await tryAdexiumFormat('interstitial');
+    return true;
+  } catch (e) { /* thử tiếp định dạng còn lại */ }
+  try {
+    await tryAdexiumFormat('push-like');
+    return true;
+  } catch (e) {
+    return false;
   }
-  controller.show()
-    .then(() => resolve())
-    .catch((result) => reject(result));
+}
+
+// Chuỗi ưu tiên nguồn ads: Monetag (chính) → Adexium (interstitial rồi push-like) → Adsgram (dự phòng cuối).
+async function showRewardedAd() {
+  if (monetagLoadPromise) await monetagLoadPromise;
+
+  if (monetagShowFn && typeof window[monetagShowFn] === 'function') {
+    try {
+      const result = await window[monetagShowFn]();
+      if (result && result.reward_event_type === 'not_valued') {
+        throw new Error('Quảng cáo không hợp lệ để thưởng');
+      }
+      return; // Monetag thành công
+    } catch (e) {
+      // Monetag lỗi/không có ads → thử Adexium
+    }
+  }
+
+  const adexiumOk = await tryAdexium();
+  if (adexiumOk) return;
+
+  return fallbackToAdsgramAsync();
+}
+
+function fallbackToAdsgramAsync() {
+  return new Promise((resolve, reject) => {
+    const controller = getNextAdController();
+    if (!controller) {
+      toast('⚠️ Chưa có quảng cáo nào khả dụng (Monetag/Adsgram)');
+      reject(new Error('no ad available'));
+      return;
+    }
+    controller.show()
+      .then(() => resolve())
+      .catch((result) => reject(result));
+  });
 }
 
 // ---- MENU 1: Đào coin ----
@@ -557,17 +619,6 @@ function formatDuration(ms) {
 document.getElementById('btnStart').addEventListener('click', async () => {
   const btn = document.getElementById('btnStart');
   btn.disabled = true;
-  const originalText = btn.innerHTML;
-  btn.innerHTML = '📺 Đang tải quảng cáo...';
-  try {
-    await showRewardedAd();
-  } catch (e) {
-    toast('Bạn cần xem hết quảng cáo để bắt đầu đào coin');
-    btn.disabled = false;
-    btn.innerHTML = originalText;
-    return;
-  }
-  btn.innerHTML = originalText;
   try {
     await api('/mining/start', { method: 'POST' });
     toast('Bắt đầu đào coin!');
@@ -582,27 +633,42 @@ document.getElementById('btnStart').addEventListener('click', async () => {
 document.getElementById('btnClaim').addEventListener('click', async () => {
   const btn = document.getElementById('btnClaim');
   btn.disabled = true;
-  const originalText = btn.textContent;
-  btn.textContent = '📺 Đang tải quảng cáo...';
-  try {
-    await showRewardedAd();
-  } catch (e) {
-    toast('Bạn cần xem hết quảng cáo để thu hoạch coin');
-    btn.disabled = false;
-    btn.textContent = originalText;
-    return;
-  }
-  btn.textContent = originalText;
   try {
     const r = await api('/mining/claim', { method: 'POST' });
     toast(`Đã thu hoạch ${r.claimed.toFixed(2)} coin!`);
     loadMiningStatus();
     loadPillBalance();
+    offerDoubleUpBonus(r.claimed);
   } catch (e) {
     toast(e.message);
+  } finally {
     btn.disabled = false;
   }
 });
+
+// Sau khi thu hoạch, mời user xem quảng cáo (TÙY CHỌN) để x2 số coin vừa nhận —
+// đúng chuẩn "ads chỉ để thưởng thêm", không ép buộc.
+function offerDoubleUpBonus(claimedAmount) {
+  const bar = document.createElement('div');
+  bar.style.cssText = 'position:fixed;bottom:100px;left:20px;right:20px;background:var(--bg-surface-2);border:1px solid var(--accent-gold);border-radius:14px;padding:14px;z-index:50;display:flex;justify-content:space-between;align-items:center;gap:10px;';
+  bar.innerHTML = `<span style="font-size:13px;">📺 Xem ads để x2 ${claimedAmount.toFixed(2)} coin vừa nhận?</span>
+    <button style="background:var(--accent-copper);border:none;color:#1a1005;font-weight:700;padding:8px 12px;border-radius:10px;font-size:12px;white-space:nowrap;">Xem ngay</button>`;
+  document.body.appendChild(bar);
+  const closeBar = () => bar.remove();
+  const timer = setTimeout(closeBar, 8000);
+  bar.querySelector('button').addEventListener('click', async () => {
+    clearTimeout(timer);
+    closeBar();
+    try {
+      await showRewardedAd();
+      const r = await api('/mining/bonus-double', { method: 'POST', body: JSON.stringify({ amount: claimedAmount }) });
+      toast(`🎉 Đã cộng thêm ${r.bonus.toFixed(2)} coin (x2)!`);
+      loadPillBalance();
+    } catch (e) {
+      toast('Không thể xem quảng cáo lúc này, thử lại sau nhé');
+    }
+  });
+}
 
 document.getElementById('btnWatchAd').addEventListener('click', async () => {
   const btn = document.getElementById('btnWatchAd');
@@ -648,21 +714,9 @@ async function loadTasks() {
   list.querySelectorAll('.task-btn:not(.done)').forEach(btn => {
     btn.addEventListener('click', async () => {
       const link = btn.dataset.link;
-      if (link) tg?.openLink(link);
+      if (link) tg && tg.openLink(link);
 
-      const originalText = btn.textContent;
       btn.disabled = true;
-      btn.textContent = '📺 Đang tải quảng cáo...';
-      try {
-        await showRewardedAd();
-      } catch (e) {
-        toast('Bạn cần xem hết quảng cáo để nhận thưởng nhiệm vụ');
-        btn.disabled = false;
-        btn.textContent = originalText;
-        return;
-      }
-      btn.textContent = originalText;
-
       try {
         const r = await api(`/tasks/${btn.dataset.id}/complete`, { method: 'POST' });
         toast(`+${r.reward} coin!`);
