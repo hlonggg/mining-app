@@ -12,8 +12,15 @@ router.get('/ad-config', async (req, res) => {
   } catch (e) {
     blockIds = [];
   }
-  const adexiumWidgetId = await getConfig('ADEXIUM_WIDGET_ID', '');
-  res.json({ blockIds: Array.isArray(blockIds) ? blockIds : [], adexiumWidgetId });
+  const monetagScriptTag = await getConfig('MONETAG_SCRIPT_TAG', '');
+  const adexiumInterstitialId = await getConfig('ADEXIUM_INTERSTITIAL_ID', '');
+  const adexiumPushlikeId = await getConfig('ADEXIUM_PUSHLIKE_ID', '');
+  res.json({
+    blockIds: Array.isArray(blockIds) ? blockIds : [],
+    monetagScriptTag,
+    adexiumInterstitialId,
+    adexiumPushlikeId,
+  });
 });
 
 module.exports = router;
