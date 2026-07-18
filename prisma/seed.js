@@ -14,9 +14,14 @@ async function main() {
     // Thay bằng blockId thật lấy tại https://partner.adsgram.ai — có thể để nhiều ID nếu bạn tạo
     // nhiều "Block" khác nhau trong tài khoản Adsgram (mỗi Block có thể set định dạng/vị trí khác nhau).
     AD_BLOCK_IDS: JSON.stringify(['your-block-id-1', 'your-block-id-2']),
-    // Widget ID lấy sau khi tạo Widget tại https://publisher.adexium.io (mục "Create Widget") —
-    // để trống nếu chưa đăng ký, hệ thống sẽ tự dùng Adsgram làm nguồn chính cho tới khi bạn điền.
-    ADEXIUM_WIDGET_ID: '',
+    // Dán NGUYÊN đoạn <script> thật lấy từ dashboard Monetag của bạn (Ad Integration > SDK).
+    // Ví dụ dạng: <script src="https://xxx.com/sdk.js" data-zone="123456" data-sdk="show_123456"></script>
+    // Để trống nếu chưa đăng ký, hệ thống sẽ tự dùng Adsgram làm nguồn dự phòng cho tới khi bạn điền.
+    MONETAG_SCRIPT_TAG: '',
+    // Widget ID Adexium theo từng định dạng — tạo tại publisher.adexium.io mục "Create Widget".
+    // Để trống nếu chưa có, hệ thống tự bỏ qua và dùng nguồn khác trong chuỗi dự phòng.
+    ADEXIUM_INTERSTITIAL_ID: '',
+    ADEXIUM_PUSHLIKE_ID: '',
   };
 
   for (const [key, value] of Object.entries(defaultConfig)) {
