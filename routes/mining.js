@@ -66,10 +66,35 @@ router.post('/claim', requireAuth, async (req, res) => {
       miningStartedAt: null,
       miningExpiresAt: null,
       lastClaimAt: now,
+      lastClaimAmount: accrued,
+      lastClaimBonusUsed: false, // mở quyền x2 cho lần thu hoạch này
     },
   });
 
   res.json({ ok: true, claimed: accrued, newBalance: updated.coinBalance });
+});
+
+// Thưởng thêm (opt-in, sau khi user tự nguyện xem quảng cáo): x2 số coin của LẦN THU HOẠCH GẦN NHẤT.
+// Chỉ dùng được 1 lần/lần thu hoạch, và số tiền lấy từ DB (không tin số "amount" client gửi lên)
+// để tránh user sửa giá trị gửi lên nhằm x2 khống số coin lớn hơn thực tế.
+router.post('/bonus-double', requireAuth, async (req, res) => {
+  const user = req.user;
+
+  if (user.lastClaimBonusUsed || !user.lastClaimAmount || user.lastClaimAmount <= 0) {
+    return res.status(400).json({ error: 'Không còn lượt thưởng x2 cho lần thu hoạch này' });
+  }
+
+  const bonus = user.lastClaimAmount; // x2 nghĩa là cộng thêm đúng bằng số đã nhận
+  const updated = await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      coinBalance: { increment: bonus },
+      totalEarned: { increment: bonus },
+      lastClaimBonusUsed: true,
+    },
+  });
+
+  res.json({ ok: true, bonus, newBalance: updated.coinBalance });
 });
 
 module.exports = router;
