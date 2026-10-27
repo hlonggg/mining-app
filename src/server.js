@@ -9,8 +9,10 @@ const prisma = new PrismaClient();
 // ==========================================
 // CẤU HÌNH TELEGRAM BOT
 // ==========================================
-const token = process.env.TELEGRAM_BOT_TOKEN;
-const WEBAPP_URL = process.env.WEBAPP_URL || 'https://miningapp.up.railway.app';
+// Sửa TELEGRAM_BOT_TOKEN thành BOT_TOKEN (cho khớp với Railway của bạn)
+const token = process.env.BOT_TOKEN; 
+// Sửa WEBAPP_URL thành MINI_APP_URL (cho khớp với Railway của bạn)
+const WEBAPP_URL = process.env.MINI_APP_URL || 'https://miningapp.up.railway.app';
 const bot = new TelegramBot(token, { polling: true });
 
 bot.onText(/\/start/, (msg) => {
