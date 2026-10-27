@@ -1,274 +1,97 @@
-const express = require('express');
-const { PrismaClient } = require('@prisma/client');
-const TelegramBot = require('node-telegram-bot-api');
-const path = require('path');
-
-const app = express();
-const prisma = new PrismaClient();
-
-// ==========================================
-// CẤU HÌNH TELEGRAM BOT
-// ==========================================
-const token = process.env.TELEGRAM_BOT_TOKEN;
-const WEBAPP_URL = process.env.WEBAPP_URL || 'https://miningapp.up.railway.app';
-const bot = new TelegramBot(token, { polling: true });
-
-bot.onText(/\/start/, (msg) => {
-  const chatId = msg.chat.id;
-  const firstName = msg.from.first_name || 'bạn';
-  
-  bot.setChatMenuButton({
-    chat_id: chatId,
-    menu_button: { type: 'web_app', text: 'Mở App Đào Coin', web_app: { url: WEBAPP_URL } }
-  }).catch(console.error);
-
-  bot.sendMessage(chatId, `Chào ${firstName}! Bấm vào nút bên dưới để mở App và bắt đầu đào coin.`, {
-    reply_markup: {
-      inline_keyboard: [[{ text: '🚀 Mở App Đào Coin', web_app: { url: WEBAPP_URL } }]]
-    }
-  });
-});
-
-// ==========================================
-// MIDDLEWARE
-// ==========================================
-app.use(express.json());
-app.use(express.static(path.join(__dirname, '../public')));
-
-// Hàm lấy Config từ dạng Key-Value (Khớp với schema của bạn)
-async function getConfigs() {
-  const configs = await prisma.config.findMany();
-  const map = Object.fromEntries(configs.map(c => [c.key, c.value]));
-  return {
-    coinRate: parseFloat(map['coinRate'] || '0.23'),
-    miningSpeed: parseFloat(map['miningSpeed'] || '0.5'),
-    minWithdraw: parseFloat(map['minWithdraw'] || '21700'),
-    adBonusMinutes: parseInt(map['adBonusMinutes'] || '30'),
-    monetagScript: map['monetagScript'] || ''
-  };
+generator client {
+  provider = "prisma-client-js"
 }
 
-// Hàm lấy userId từ Header hoặc Query (Dùng cho test)
-function getUserId(req) {
-  return req.query.userId || req.body.userId || '123456789';
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
-// ==========================================
-// CÁC API CHO FRONTEND
-// ==========================================
+model User {
+  id             Int       @id @default(autoincrement())
+  telegramId     String    @unique
+  username       String?
+  firstName      String?
+  coinBalance    Float     @default(0)
+  totalEarned    Float     @default(0)
 
-// 1. API Config (Trả về cấu hình cho Frontend)
-app.get('/api/config', async (req, res) => {
-  try {
-    const config = await getConfigs();
-    res.json(config);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+  // Trạng thái phiên đào coin
+  miningActive     Boolean   @default(false)
+  miningStartedAt  DateTime?
+  miningExpiresAt  DateTime? 
+  miningRate       Float     @default(0.3) 
+  lastClaimAt      DateTime?
+  lastClaimAmount    Float     @default(0) 
+  lastClaimBonusUsed Boolean   @default(true) 
 
-// 2. API Lấy thông tin User (Ví)
-app.get('/api/user/me', async (req, res) => {
-  const telegramId = getUserId(req);
-  try {
-    let user = await prisma.user.findUnique({ where: { telegramId: String(telegramId) } });
-    if (!user) {
-      user = await prisma.user.create({
-        data: { 
-          telegramId: String(telegramId), 
-          firstName: 'User',
-          referralCode: 'REF' + telegramId
-        }
-      });
-    }
-    const config = await getConfigs();
-    res.json({
-      coinBalance: user.coinBalance,
-      estimatedVnd: user.coinBalance * config.coinRate,
-      walletInfo: user.walletInfo || '',
-      minWithdrawCoin: config.minWithdraw,
-      coinToVndRate: config.coinRate,
-      firstName: user.firstName
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+  // Referral
+  referralCode   String    @unique
+  referredById   Int?
+  referredBy     User?     @relation("Referrals", fields: [referredById], references: [id])
+  referrals      User[]    @relation("Referrals")
 
-// 3. API Trạng thái Đào Coin
-app.get('/api/mining/status', async (req, res) => {
-  const telegramId = getUserId(req);
-  try {
-    const user = await prisma.user.findUnique({ where: { telegramId: String(telegramId) } });
-    const config = await getConfigs();
-    if (!user) return res.status(404).json({ error: 'User not found' });
+  // Rút tiền
+  walletInfo     String?   
 
-    const now = new Date();
-    const isMining = user.miningActive && user.miningExpiresAt && new Date(user.miningExpiresAt) > now;
-    let accrued = 0;
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-    if (isMining) {
-      const diffSeconds = (now.getTime() - new Date(user.miningStartedAt).getTime()) / 1000;
-      accrued = diffSeconds * (user.miningRate || config.miningSpeed);
-    }
+  userTasks      UserTask[]
+  adWatches      AdWatch[]
+  withdrawRequests WithdrawRequest[]
+}
 
-    res.json({
-      miningActive: isMining,
-      accruedThisSession: accrued,
-      miningRate: user.miningRate || config.miningSpeed,
-      miningExpiresAt: user.miningExpiresAt,
-      sessionExpired: !isMining && user.miningActive
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+model Task {
+  id           Int      @id @default(autoincrement())
+  title        String
+  description  String?
+  rewardCoins  Float
+  type         String   
+  link         String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
 
-// 4. API Bắt đầu Đào
-app.post('/api/mining/start', async (req, res) => {
-  const telegramId = getUserId(req);
-  try {
-    const startTime = new Date();
-    const expireTime = new Date(startTime.getTime() + 12 * 3600 * 1000); // Mặc định 12 tiếng
-    
-    await prisma.user.update({
-      where: { telegramId: String(telegramId) },
-      data: { 
-        miningActive: true,
-        miningStartedAt: startTime,
-        miningExpiresAt: expireTime
-      }
-    });
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+  userTasks    UserTask[]
+}
 
-// 5. API Thu hoạch Coin
-app.post('/api/mining/claim', async (req, res) => {
-  const telegramId = getUserId(req);
-  try {
-    const user = await prisma.user.findUnique({ where: { telegramId: String(telegramId) } });
-    if (!user || !user.miningActive) return res.status(400).json({ error: 'Không có phiên đào' });
+model UserTask {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  taskId      Int
+  status      String   @default("pending") 
+  completedAt DateTime?
 
-    const now = new Date();
-    const diffSeconds = (now.getTime() - new Date(user.miningStartedAt).getTime()) / 1000;
-    const mined = diffSeconds * user.miningRate;
+  user        User     @relation(fields: [userId], references: [id])
+  task        Task     @relation(fields: [taskId], references: [id])
 
-    await prisma.user.update({
-      where: { telegramId: String(telegramId) },
-      data: {
-        coinBalance: { increment: mined },
-        totalEarned: { increment: mined },
-        miningActive: false,
-        lastClaimAt: now,
-        lastClaimAmount: mined,
-        lastClaimBonusUsed: false // Mở khóa quyền x2
-      }
-    });
+  @@unique([userId, taskId])
+}
 
-    res.json({ claimed: mined });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+model AdWatch {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  rewardType   String   
+  rewardAmount Int      
+  watchedAt    DateTime @default(now())
 
-// 6. API X2 Thưởng
-app.post('/api/mining/bonus-double', async (req, res) => {
-  const telegramId = getUserId(req);
-  try {
-    const user = await prisma.user.findUnique({ where: { telegramId: String(telegramId) } });
-    if (!user || user.lastClaimBonusUsed) return res.status(400).json({ error: 'Không thể x2 lúc này' });
+  user         User     @relation(fields: [userId], references: [id])
+}
 
-    await prisma.user.update({
-      where: { telegramId: String(telegramId) },
-      data: {
-        coinBalance: { increment: user.lastClaimAmount },
-        totalEarned: { increment: user.lastClaimAmount },
-        lastClaimBonusUsed: true
-      }
-    });
-    res.json({ bonus: user.lastClaimAmount });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+model WithdrawRequest {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  coinAmount  Float
+  vndAmount   Float
+  walletInfo  String
+  status      String   @default("pending") 
+  createdAt   DateTime @default(now())
+  processedAt DateTime?
+  note        String?
 
-// 7. API Xem Quảng Cáo (Cộng thêm thời gian)
-app.post('/api/ads/watch', async (req, res) => {
-  const telegramId = getUserId(req);
-  try {
-    const user = await prisma.user.findUnique({ where: { telegramId: String(telegramId) } });
-    const config = await getConfigs();
-    if (!user) return res.status(404).json({ success: false, error: 'User không tồn tại' });
+  user        User     @relation(fields: [userId], references: [id])
+}
 
-    let newEnd = user.miningExpiresAt ? new Date(user.miningExpiresAt).getTime() : Date.now();
-    newEnd += config.adBonusMinutes * 60 * 1000;
-
-    await prisma.user.update({
-      where: { telegramId: String(telegramId) },
-      data: { 
-        miningExpiresAt: new Date(newEnd),
-        miningActive: true // Đảm bảo trạng thái đào được bật lại
-      }
-    });
-
-    // Ghi log AdWatch
-    await prisma.adWatch.create({
-      data: { userId: user.id, rewardType: 'extend_time', rewardAmount: config.adBonusMinutes }
-    });
-
-    res.json({ success: true, addedMinutes: config.adBonusMinutes });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// 8. API Lưu Cấu Hình Từ Admin (Lưu vào bảng Key-Value)
-app.post('/api/admin/config', async (req, res) => {
-  const { password, coinRate, miningSpeed, minWithdraw, adBonusMinutes, monetagScript } = req.body;
-  if (password !== process.env.ADMIN_PASSWORD) return res.status(401).json({ success: false, error: 'Sai mật khẩu' });
-
-  try {
-    const updates = [
-      { key: 'coinRate', value: String(coinRate) },
-      { key: 'miningSpeed', value: String(miningSpeed) },
-      { key: 'minWithdraw', value: String(minWithdraw) },
-      { key: 'adBonusMinutes', value: String(adBonusMinutes) },
-      { key: 'monetagScript', value: monetagScript || '' }
-    ];
-
-    for (const item of updates) {
-      await prisma.config.upsert({
-        where: { key: item.key },
-        update: { value: item.value },
-        create: { key: item.key, value: item.value }
-      });
-    }
-    res.json({ success: true, message: 'Đã lưu cấu hình!' });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Các API rỗng cho giao diện (Để không bị lỗi 404)
-app.get('/api/tasks', (req, res) => res.json([]));
-app.get('/api/referral', async (req, res) => {
-  const telegramId = getUserId(req);
-  const user = await prisma.user.findUnique({ where: { telegramId: String(telegramId) } });
-  res.json({ referralCode: user?.referralCode || 'DEMO', totalReferrals: 0, referrals: [], inviteLink: '' });
-});
-app.get('/api/user/withdraw/history', (req, res) => res.json([]));
-app.post('/api/user/wallet', async (req, res) => {
-  const telegramId = getUserId(req);
-  await prisma.user.update({ where: { telegramId: String(telegramId) }, data: { walletInfo: req.body.walletInfo } });
-  res.json({ success: true });
-});
-app.post('/api/user/withdraw', (req, res) => res.json({ success: true }));
-
-// Khởi động server
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
-  console.log(`Server đang chạy tại http://localhost:${PORT}`);
-});
+model Config {
+  key   String @id
+  value String
+}
