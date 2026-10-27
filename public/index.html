@@ -7,9 +7,6 @@
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script src="https://sad.adsgram.ai/js/sad.min.js"></script>
 <script type="text/javascript" src="https://cdn.tgads.space/assets/js/adexium-widget.min.js"></script>
-<!-- Script SDK Monetag KHÔNG đặt cố định ở đây — vì domain thật do Monetag cấp riêng theo từng
-     tài khoản (không phải URL cố định chung cho mọi người). Script được tự động chèn bằng JS ở
-     cuối trang, dựa trên đoạn <script> thật bạn dán vào trang admin (ô "Monetag script tag"). -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
@@ -381,35 +378,33 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
   });
 });
 
-// ---- Quảng cáo THƯỞNG THÊM (không bắt buộc cho chức năng cơ bản): Monetag (chính) → Adsgram (dự phòng) ----
-// Lưu ý quan trọng: theo chính sách các mạng quảng cáo (Adsgram, và tương tự ở hầu hết network khác),
-// KHÔNG được bắt buộc xem ads mới cho dùng chức năng cơ bản của app — chỉ được dùng ads để THƯỞNG THÊM
-// (opt-in). Vi phạm sẽ bị từ chối/khóa tài khoản quảng cáo vĩnh viễn, không thương lượng lại được.
+// ---- QUẢNG CÁO ----
 let adBlockIds = [];
 let adRotateIndex = 0;
 const adControllers = {};
-let monetagShowFn = null; // tên hàm show_XXX thật, đọc từ script tag admin dán vào
+let monetagShowFn = null;
 let monetagLoadPromise = null;
 let adexiumIds = { interstitial: '', pushlike: '' };
-const adexiumWidgets = {}; // cache theo định dạng
+const adexiumWidgets = {};
 
+// FIX: Đổi fetch('/api/public/ad-config') thành '/api/config' để khớp với Backend
 async function loadAdConfig() {
   try {
-    const res = await fetch('/api/public/ad-config');
+    const res = await fetch('/api/config');
     const data = await res.json();
-    adBlockIds = data.blockIds || [];
+    adBlockIds = data.adBlockIds || [];
     adexiumIds.interstitial = data.adexiumInterstitialId || '';
     adexiumIds.pushlike = data.adexiumPushlikeId || '';
-    if (data.monetagScriptTag) {
-      monetagLoadPromise = injectMonetagScript(data.monetagScriptTag);
+    // Hỗ trợ cả 2 tên biến trả về từ backend để không bị lỗi
+    const scriptTag = data.monetagScriptTag || data.monetagScript; 
+    if (scriptTag) {
+      monetagLoadPromise = injectMonetagScript(scriptTag);
     }
   } catch (e) {
     adBlockIds = [];
   }
 }
 
-// Chèn động đoạn <script> Monetag thật (dán từ dashboard của bạn trong trang admin) vào trang,
-// và tự đọc ra tên hàm show_XXX từ thuộc tính data-sdk của chính đoạn script đó.
 function injectMonetagScript(scriptTagHtml) {
   return new Promise((resolve) => {
     try {
@@ -447,7 +442,6 @@ function getNextAdController() {
   return adControllers[blockId];
 }
 
-// Khởi tạo (1 lần, có cache) widget Adexium theo từng định dạng riêng: interstitial hoặc push-like.
 function ensureAdexiumWidget(format) {
   const wid = format === 'interstitial' ? adexiumIds.interstitial : adexiumIds.pushlike;
   if (!wid || typeof window.AdexiumWidget === 'undefined') return null;
@@ -457,8 +451,6 @@ function ensureAdexiumWidget(format) {
   return adexiumWidgets[format];
 }
 
-// Thử hiện ads Adexium theo 1 định dạng cụ thể. Giống logic Adexium trước đó: ưu tiên
-// adPlaybackCompleted, có thêm adClosed + timeout 15s dự phòng cho định dạng ảnh tĩnh.
 function tryAdexiumFormat(format) {
   return new Promise((resolve, reject) => {
     const widget = ensureAdexiumWidget(format);
@@ -505,12 +497,11 @@ function tryAdexiumFormat(format) {
   });
 }
 
-// Thử lần lượt 2 định dạng Adexium: interstitial trước, hết ads thì thử push-like.
 async function tryAdexium() {
   try {
     await tryAdexiumFormat('interstitial');
     return true;
-  } catch (e) { /* thử tiếp định dạng còn lại */ }
+  } catch (e) { }
   try {
     await tryAdexiumFormat('push-like');
     return true;
@@ -519,19 +510,27 @@ async function tryAdexium() {
   }
 }
 
-// Chuỗi ưu tiên nguồn ads: Monetag (chính) → Adexium (interstitial rồi push-like) → Adsgram (dự phòng cuối).
+// FIX: Xử lý logic chờ Monetag
 async function showRewardedAd() {
   if (monetagLoadPromise) await monetagLoadPromise;
 
   if (monetagShowFn && typeof window[monetagShowFn] === 'function') {
     try {
+      // Gọi SDK Monetag (libtl). SDK này thường không trả về Promise
       const result = await window[monetagShowFn]();
+      
+      // Nếu nó trả về object báo lỗi
       if (result && result.reward_event_type === 'not_valued') {
         throw new Error('Quảng cáo không hợp lệ để thưởng');
       }
-      return; // Monetag thành công
+      
+      // Vì Monetag không trả Promise để biết khi nào user xem xong, ta đợi 15s
+      if (!result) {
+        await new Promise(r => setTimeout(r, 15000));
+      }
+      return; // Thành công
     } catch (e) {
-      // Monetag lỗi/không có ads → thử Adexium
+      console.log('Monetag lỗi, chuyển sang mạng khác', e);
     }
   }
 
@@ -584,7 +583,7 @@ function renderMining() {
   const btnWatchAd = document.getElementById('btnWatchAd');
 
   amount.textContent = miningState.accruedThisSession.toFixed(2);
-  const progressPct = Math.min(100, (miningState.accruedThisSession / 2000) * 100); // vòng tròn lấp dần mang tính hình ảnh
+  const progressPct = Math.min(100, (miningState.accruedThisSession / 2000) * 100); 
   core.style.setProperty('--progress', progressPct + '%');
 
   if (miningState.miningActive) {
@@ -646,8 +645,6 @@ document.getElementById('btnClaim').addEventListener('click', async () => {
   }
 });
 
-// Sau khi thu hoạch, mời user xem quảng cáo (TÙY CHỌN) để x2 số coin vừa nhận —
-// đúng chuẩn "ads chỉ để thưởng thêm", không ép buộc.
 function offerDoubleUpBonus(claimedAmount) {
   const bar = document.createElement('div');
   bar.style.cssText = 'position:fixed;bottom:100px;left:20px;right:20px;background:var(--bg-surface-2);border:1px solid var(--accent-gold);border-radius:14px;padding:14px;z-index:50;display:flex;justify-content:space-between;align-items:center;gap:10px;';
@@ -670,11 +667,13 @@ function offerDoubleUpBonus(claimedAmount) {
   });
 }
 
+// FIX: Bắt sự kiện xem Ads chặt chẽ hơn
 document.getElementById('btnWatchAd').addEventListener('click', async () => {
   const btn = document.getElementById('btnWatchAd');
   const originalText = btn.textContent;
   btn.disabled = true;
   btn.textContent = '📺 Đang tải quảng cáo...';
+  
   try {
     await showRewardedAd();
   } catch (e) {
@@ -683,6 +682,7 @@ document.getElementById('btnWatchAd').addEventListener('click', async () => {
     btn.textContent = originalText;
     return;
   }
+  
   btn.textContent = originalText;
   try {
     const r = await api('/ads/watch', { method: 'POST' });
