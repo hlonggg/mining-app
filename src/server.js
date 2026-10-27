@@ -9,7 +9,7 @@ const prisma = new PrismaClient();
 // ==========================================
 // CẤU HÌNH TELEGRAM BOT
 // ==========================================
-const token = process.env.BOT_TOKEN; // Đã sửa theo biến trên Railway của bạn
+const token = process.env.BOT_TOKEN; 
 const WEBAPP_URL = process.env.MINI_APP_URL || 'https://miningapp.up.railway.app';
 const bot = new TelegramBot(token, { polling: true });
 
@@ -29,13 +29,18 @@ bot.onText(/\/start/, (msg) => {
   });
 });
 
+// Chống crash bot khi mất mạng
+bot.on('polling_error', (error) => {
+  console.error('Lỗi polling bot:', error.code);
+});
+
 // ==========================================
 // MIDDLEWARE
 // ==========================================
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
 
-// Hàm lấy Config (Map chính xác các Key của Admin sang dạng Frontend cần)
+// Hàm lấy Config (Map chính xác Key của Admin sang dạng Frontend)
 async function getConfigs() {
   const configs = await prisma.config.findMany();
   const map = Object.fromEntries(configs.map(c => [c.key, c.value]));
@@ -44,7 +49,10 @@ async function getConfigs() {
     miningSpeed: parseFloat(map['MINING_RATE_PER_SECOND'] || '0.5'),
     minWithdraw: parseFloat(map['MIN_WITHDRAW_COIN'] || '21700'),
     adBonusMinutes: parseInt(map['AD_EXTEND_MINUTES'] || '30'),
-    monetagScript: map['MONETAG_SCRIPT_TAG'] || ''
+    monetagScript: map['MONETAG_SCRIPT_TAG'] || '',
+    adexiumInterstitialId: map['ADEXIUM_INTERSTITIAL_ID'] || '',
+    adexiumPushlikeId: map['ADEXIUM_PUSHLIKE_ID'] || '',
+    adBlockIds: map['AD_BLOCK_IDS'] ? JSON.parse(map['AD_BLOCK_IDS']) : []
   };
 }
 
@@ -63,6 +71,7 @@ function getTelegramId(req) {
 // ==========================================
 // API DÀNH CHO NGƯỜI DÙNG (INDEX.HTML)
 // ==========================================
+
 app.get('/api/config', async (req, res) => {
   try {
     res.json(await getConfigs());
@@ -219,10 +228,7 @@ app.post('/api/ads/watch', async (req, res) => {
 
     await prisma.user.update({
       where: { telegramId },
-      data: { 
-        miningExpiresAt: new Date(newEnd),
-        miningActive: true
-      }
+      data: { miningExpiresAt: new Date(newEnd), miningActive: true }
     });
 
     await prisma.adWatch.create({
@@ -293,18 +299,53 @@ app.get('/api/referral', async (req, res) => {
 });
 
 // ==========================================
+// API NHẬN POSTBACK TỪ MONETAG (Cộng giờ tự động)
+// ==========================================
+app.get('/api/postback/monetag', async (req, res) => {
+  const { telegram_id, reward_event_type, secret } = req.query;
+
+  if (secret !== 'thanhcong') {
+    return res.status(401).send('Unauthorized');
+  }
+
+  if (reward_event_type !== 'valued') {
+    return res.status(200).send('OK');
+  }
+
+  try {
+    const user = await prisma.user.findUnique({ where: { telegramId: String(telegram_id) } });
+    if (!user) return res.status(200).send('User not found');
+
+    const config = await getConfigs();
+    let newEnd = user.miningExpiresAt ? new Date(user.miningExpiresAt).getTime() : Date.now();
+    newEnd += config.adBonusMinutes * 60 * 1000;
+
+    await prisma.user.update({
+      where: { telegramId: String(telegram_id) },
+      data: { miningExpiresAt: new Date(newEnd), miningActive: true }
+    });
+
+    await prisma.adWatch.create({
+      data: { userId: user.id, rewardType: 'extend_time', rewardAmount: config.adBonusMinutes }
+    });
+
+    console.log(`[POSTBACK] Đã cộng ${config.adBonusMinutes} phút cho user ${telegram_id}`);
+    res.status(200).send('OK');
+  } catch (error) {
+    console.error('Lỗi Postback:', error);
+    res.status(500).send('Server Error');
+  }
+});
+
+// ==========================================
 // API DÀNH CHO ADMIN (KHỚP VỚI ADMIN.HTML)
 // ==========================================
-// Middleware kiểm tra mật khẩu từ Header
 const checkAdmin = (req, res, next) => {
   const pass = req.headers['x-admin-password'];
-  if (pass !== process.env.ADMIN_PASSWORD) {
-    return res.status(401).json({ error: 'Sai mật khẩu' });
-  }
+  if (pass !== process.env.ADMIN_PASSWORD) return res.status(401).json({ error: 'Sai mật khẩu' });
   next();
 };
 
-// Admin lấy cấu hình
 app.get('/api/admin/config', checkAdmin, async (req, res) => {
   try {
     const configs = await prisma.config.findMany();
@@ -315,7 +356,6 @@ app.get('/api/admin/config', checkAdmin, async (req, res) => {
   }
 });
 
-// Admin lưu cấu hình
 app.post('/api/admin/config', checkAdmin, async (req, res) => {
   try {
     const data = req.body;
@@ -332,7 +372,6 @@ app.post('/api/admin/config', checkAdmin, async (req, res) => {
   }
 });
 
-// Admin lấy danh sách rút tiền
 app.get('/api/admin/withdrawals', checkAdmin, async (req, res) => {
   try {
     const status = req.query.status || 'pending';
@@ -346,7 +385,6 @@ app.get('/api/admin/withdrawals', checkAdmin, async (req, res) => {
   }
 });
 
-// Admin duyệt/từ chối rút tiền
 app.post('/api/admin/withdrawals/:id/decide', checkAdmin, async (req, res) => {
   const id = parseInt(req.params.id);
   const { action } = req.body;
