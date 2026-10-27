@@ -9,9 +9,7 @@ const prisma = new PrismaClient();
 // ==========================================
 // CẤU HÌNH TELEGRAM BOT
 // ==========================================
-// Sửa TELEGRAM_BOT_TOKEN thành BOT_TOKEN (cho khớp với Railway của bạn)
-const token = process.env.BOT_TOKEN; 
-// Sửa WEBAPP_URL thành MINI_APP_URL (cho khớp với Railway của bạn)
+const token = process.env.BOT_TOKEN; // Đã sửa theo biến trên Railway của bạn
 const WEBAPP_URL = process.env.MINI_APP_URL || 'https://miningapp.up.railway.app';
 const bot = new TelegramBot(token, { polling: true });
 
@@ -37,20 +35,20 @@ bot.onText(/\/start/, (msg) => {
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
 
-// Hàm lấy Config từ dạng Key-Value
+// Hàm lấy Config (Map chính xác các Key của Admin sang dạng Frontend cần)
 async function getConfigs() {
   const configs = await prisma.config.findMany();
   const map = Object.fromEntries(configs.map(c => [c.key, c.value]));
   return {
-    coinRate: parseFloat(map['coinRate'] || '0.23'),
-    miningSpeed: parseFloat(map['miningSpeed'] || '0.5'),
-    minWithdraw: parseFloat(map['minWithdraw'] || '21700'),
-    adBonusMinutes: parseInt(map['adBonusMinutes'] || '30'),
-    monetagScript: map['monetagScript'] || ''
+    coinRate: parseFloat(map['COIN_TO_VND'] || '0.23'),
+    miningSpeed: parseFloat(map['MINING_RATE_PER_SECOND'] || '0.5'),
+    minWithdraw: parseFloat(map['MIN_WITHDRAW_COIN'] || '21700'),
+    adBonusMinutes: parseInt(map['AD_EXTEND_MINUTES'] || '30'),
+    monetagScript: map['MONETAG_SCRIPT_TAG'] || ''
   };
 }
 
-// FIX: Hàm lấy Telegram ID thật từ Header (initData)
+// Hàm lấy Telegram ID
 function getTelegramId(req) {
   const initData = req.headers['x-telegram-init-data'];
   if (!initData) return req.body.userId || req.query.userId || null;
@@ -63,13 +61,11 @@ function getTelegramId(req) {
 }
 
 // ==========================================
-// CÁC API CHO FRONTEND
+// API DÀNH CHO NGƯỜI DÙNG (INDEX.HTML)
 // ==========================================
-
 app.get('/api/config', async (req, res) => {
   try {
-    const config = await getConfigs();
-    res.json(config);
+    res.json(await getConfigs());
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -138,6 +134,7 @@ app.post('/api/mining/start', async (req, res) => {
   if (!telegramId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
+    const config = await getConfigs();
     const startTime = new Date();
     const expireTime = new Date(startTime.getTime() + 12 * 3600 * 1000);
     
@@ -146,7 +143,8 @@ app.post('/api/mining/start', async (req, res) => {
       data: { 
         miningActive: true,
         miningStartedAt: startTime,
-        miningExpiresAt: expireTime
+        miningExpiresAt: expireTime,
+        miningRate: config.miningSpeed
       }
     });
     res.json({ success: true });
@@ -237,33 +235,55 @@ app.post('/api/ads/watch', async (req, res) => {
   }
 });
 
-app.post('/api/admin/config', async (req, res) => {
-  const { password, coinRate, miningSpeed, minWithdraw, adBonusMinutes, monetagScript } = req.body;
-  if (password !== process.env.ADMIN_PASSWORD) return res.status(401).json({ success: false, error: 'Sai mật khẩu' });
+app.post('/api/user/wallet', async (req, res) => {
+  const telegramId = getTelegramId(req);
+  if (!telegramId) return res.status(401).json({ error: 'Unauthorized' });
+  await prisma.user.update({ where: { telegramId }, data: { walletInfo: req.body.walletInfo } });
+  res.json({ success: true });
+});
+
+app.post('/api/user/withdraw', async (req, res) => {
+  const telegramId = getTelegramId(req);
+  if (!telegramId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
-    const updates = [
-      { key: 'coinRate', value: String(coinRate) },
-      { key: 'miningSpeed', value: String(miningSpeed) },
-      { key: 'minWithdraw', value: String(minWithdraw) },
-      { key: 'adBonusMinutes', value: String(adBonusMinutes) },
-      { key: 'monetagScript', value: monetagScript || '' }
-    ];
+    const user = await prisma.user.findUnique({ where: { telegramId } });
+    const config = await getConfigs();
 
-    for (const item of updates) {
-      await prisma.config.upsert({
-        where: { key: item.key },
-        update: { value: item.value },
-        create: { key: item.key, value: item.value }
-      });
+    if (user.coinBalance < config.minWithdraw) {
+      return res.status(400).json({ error: `Cần tối thiểu ${config.minWithdraw} coin để rút` });
     }
-    res.json({ success: true, message: 'Đã lưu cấu hình!' });
+    if (!user.walletInfo) {
+      return res.status(400).json({ error: 'Vui lòng nhập thông tin nhận tiền' });
+    }
+
+    const vndAmount = user.coinBalance * config.coinRate;
+
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: user.id }, data: { coinBalance: 0 } }),
+      prisma.withdrawRequest.create({
+        data: { userId: user.id, coinAmount: user.coinBalance, vndAmount, walletInfo: user.walletInfo, status: 'pending' }
+      })
+    ]);
+
+    res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ error: error.message });
   }
 });
 
-// Các API rỗng cho giao diện
+app.get('/api/user/withdraw/history', async (req, res) => {
+  const telegramId = getTelegramId(req);
+  if (!telegramId) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const user = await prisma.user.findUnique({ where: { telegramId } });
+    const history = await prisma.withdrawRequest.findMany({ where: { userId: user.id }, orderBy: { createdAt: 'desc' } });
+    res.json(history.map(w => ({ vndAmount: w.vndAmount, status: w.status })));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/api/tasks', (req, res) => res.json([]));
 app.get('/api/referral', async (req, res) => {
   const telegramId = getTelegramId(req);
@@ -271,14 +291,81 @@ app.get('/api/referral', async (req, res) => {
   const user = await prisma.user.findUnique({ where: { telegramId } });
   res.json({ referralCode: user?.referralCode || 'DEMO', totalReferrals: 0, referrals: [], inviteLink: '' });
 });
-app.get('/api/user/withdraw/history', (req, res) => res.json([]));
-app.post('/api/user/wallet', async (req, res) => {
-  const telegramId = getTelegramId(req);
-  if (!telegramId) return res.status(401).json({ error: 'Unauthorized' });
-  await prisma.user.update({ where: { telegramId }, data: { walletInfo: req.body.walletInfo } });
-  res.json({ success: true });
+
+// ==========================================
+// API DÀNH CHO ADMIN (KHỚP VỚI ADMIN.HTML)
+// ==========================================
+// Middleware kiểm tra mật khẩu từ Header
+const checkAdmin = (req, res, next) => {
+  const pass = req.headers['x-admin-password'];
+  if (pass !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Sai mật khẩu' });
+  }
+  next();
+};
+
+// Admin lấy cấu hình
+app.get('/api/admin/config', checkAdmin, async (req, res) => {
+  try {
+    const configs = await prisma.config.findMany();
+    const map = Object.fromEntries(configs.map(c => [c.key, c.value]));
+    res.json(map);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
-app.post('/api/user/withdraw', (req, res) => res.json({ success: true }));
+
+// Admin lưu cấu hình
+app.post('/api/admin/config', checkAdmin, async (req, res) => {
+  try {
+    const data = req.body;
+    for (const [key, value] of Object.entries(data)) {
+      await prisma.config.upsert({
+        where: { key },
+        update: { value: String(value) },
+        create: { key, value: String(value) },
+      });
+    }
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Admin lấy danh sách rút tiền
+app.get('/api/admin/withdrawals', checkAdmin, async (req, res) => {
+  try {
+    const status = req.query.status || 'pending';
+    const list = await prisma.withdrawRequest.findMany({
+      where: { status },
+      include: { user: true }
+    });
+    res.json(list);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Admin duyệt/từ chối rút tiền
+app.post('/api/admin/withdrawals/:id/decide', checkAdmin, async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { action } = req.body;
+  
+  let status = 'pending';
+  if (action === 'approve') status = 'approved';
+  if (action === 'paid') status = 'paid';
+  if (action === 'reject') status = 'rejected';
+
+  try {
+    await prisma.withdrawRequest.update({
+      where: { id },
+      data: { status, processedAt: new Date() }
+    });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // Khởi động server
 const PORT = process.env.PORT || 8080;
